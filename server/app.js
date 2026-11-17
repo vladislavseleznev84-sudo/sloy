@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateInitData } = require('./validate');
 const { PLANS, activePlan } = require('./plans');
+const insights = require('./insights');
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
@@ -11,17 +12,18 @@ function initials(name) {
   return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : '')).toUpperCase();
 }
 
-function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, now = () => Date.now() }) {
+function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, onError = () => {}, now = () => Date.now() }) {
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const fmtDate = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' });
 
   function buildFeed(userId) {
+    const vipSet = new Set((db.getSettings(userId).vip) || []);
     const since = now() - 24 * 3600 * 1000;
     const rows = db.feed(userId, since).filter((r) => (!botId || r.chat_id !== botId) && !(r.snoozed_until > now()));
     const items = rows.map((r) => {
       const a = JSON.parse(r.analysis);
       const history = JSON.parse(r.history || '[]').map((h) => ({ text: h.text, time: fmtTime.format(h.at) }));
-      return { id: String(r.id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a, deleted: r.deleted_at > 0, deletedTime: r.deleted_at ? fmtTime.format(r.deleted_at) : '', edited: r.edited_at > 0, history };
+      return { id: String(r.id), chatId: r.chat_id, vip: vipSet.has(r.chat_id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a, deleted: r.deleted_at > 0, deletedTime: r.deleted_at ? fmtTime.format(r.deleted_at) : '', edited: r.edited_at > 0, history };
     });
     const important = items.filter((m) => m.level !== 'quiet');
     const quiet = items.filter((m) => m.level === 'quiet');
@@ -79,6 +81,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       if (!conn || !conn.enabled) return json(res, 409, { error: 'not connected' });
       try {
         await tg.call('sendMessage', { business_connection_id: conn.id, chat_id: row.chat_id, text: text.trim() });
+        db.markAnswered(conn.id, row.chat_id, now());
       } catch (e) { return json(res, 502, { error: 'telegram', detail: e.message }); }
       return json(res, 200, { ok: true });
     }
@@ -97,11 +100,30 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     }
     if (req.method === 'POST' && url.pathname === '/api/settings') {
       const { layers } = await body(req);
-      const ok = ['radar', 'reply', 'memory', 'recap', 'auto', 'trace'];
+      const ok = ['radar', 'reply', 'memory', 'recap', 'auto', 'trace', 'remind', 'quiet'];
       if (!layers || typeof layers !== 'object') return json(res, 400, { error: 'bad request' });
       const clean = {}; for (const k of ok) if (typeof layers[k] === 'boolean') clean[k] = layers[k];
       const cur = db.getSettings(user.id); db.setSettings(user.id, { ...cur, layers: { ...(cur.layers || {}), ...clean } });
       return json(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/vip') {
+      const { chatId, on } = await body(req); const cid = Number(chatId);
+      if (!Number.isInteger(cid) || typeof on !== 'boolean') return json(res, 400, { error: 'bad request' });
+      const cur = db.getSettings(user.id), set = new Set(cur.vip || []);
+      on ? set.add(cid) : set.delete(cid);
+      db.setSettings(user.id, { ...cur, vip: [...set].slice(0, 100) });
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/ask') {
+      const { q } = await body(req);
+      if (typeof q !== 'string' || !q.trim() || q.length > 200) return json(res, 400, { error: 'bad request' });
+      const rows = db.allSince(user.id, now() - 30 * 86400000).filter((r) => !botId || r.chat_id !== botId);
+      const found = insights.search(rows, q, { now: now(), tz });
+      return json(res, 200, { results: found.map((r) => ({ id: r.id, name: r.name, out: r.out, deleted: r.deleted, text: r.text, time: fmtTime.format(r.ts), date: fmtDate.format(r.ts) })) });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/week') {
+      const rows = db.allSince(user.id, now() - 8 * 86400000).filter((r) => !botId || r.chat_id !== botId);
+      return json(res, 200, insights.weekStats(rows, { now: now(), tz }));
     }
     if (req.method === 'POST' && url.pathname === '/api/snooze') {
       const { id, hours } = await body(req); const h = Number(hours);
@@ -132,7 +154,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
         if (req.headers['x-telegram-bot-api-secret-token'] !== webhookSecret) { res.writeHead(401); return res.end(); }
         const update = await body(req);
         res.writeHead(200); res.end('ok');
-        bot.handle(update).catch((e) => console.error('update failed:', e.message));
+        bot.handle(update).catch((e) => { console.error('update failed:', e.message); onError('не обработано событие Telegram: ' + e.message); });
         return;
       }
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);

@@ -16,12 +16,12 @@ const mkInit = (user, authDate = Math.floor(T0 / 1000)) => signInitData({ user: 
 
 function fakeTg() {
   const calls = [];
-  return { calls, call: async (method, params) => { calls.push({ method, params }); return method === 'createInvoiceLink' ? 'https://t.me/$invoice' : {}; } };
+  return { calls, upload: async (method, params, field, file) => { calls.push({ method, params, field, file }); return {}; }, call: async (method, params) => { calls.push({ method, params }); return method === 'createInvoiceLink' ? 'https://t.me/$invoice' : {}; } };
 }
-function setup(adminIds = new Set(), botId = 555) {
+function setup(adminIds = new Set(), botId = 555, clock = { t: T0 }, backup = null) {
   const db = openDb(':memory:'); const tg = fakeTg();
-  const bot = createBot({ tg, db, webappUrl: 'https://sloy.example', adminIds, botId, now: () => T0 });
-  return { db, tg, bot, adminIds };
+  const bot = createBot({ tg, db, webappUrl: 'https://sloy.example', adminIds, botId, backup, now: () => clock.t });
+  return { db, tg, bot, adminIds, clock };
 }
 
 test('initData: валидная подпись проходит, подделка и протухшая — нет', () => {
@@ -303,4 +303,133 @@ test('СЛЕД: слой выключен — всё записывается, �
     assert.strictEqual(db.purge(T0 + 1000), 1);                                                  // всё старше точки — стирается
     assert.strictEqual(db.feed(42, 0).length, 0);
   });
+});
+
+const HOUR = 3600000;
+const bmOut = (conn, chatId, id, text, t = T0, owner = 1) => ({ business_message: { business_connection_id: conn, message_id: id, date: t / 1000, chat: { id: chatId, first_name: 'Чат' + chatId }, from: { id: owner }, text } });
+const bmIn = (conn, chatId, id, text, t = T0) => ({ business_message: { business_connection_id: conn, message_id: id, date: t / 1000, chat: { id: chatId, first_name: 'Чат' + chatId }, from: { id: chatId }, text } });
+const reminders = require('../server/reminders');
+const insights = require('../server/insights');
+const alertsMod = require('../server/alerts');
+
+test('ответ владельца: сохраняется для поиска, закрывает «ждущие ответа», в ленту не попадает', async () => {
+  const { db, bot } = setup(new Set([1]));
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  await bot.handle(bmIn('u1', 7, 1, 'Подпиши акт до 18:00', T0));
+  assert.strictEqual(db.pendingReplies(T0 + 4 * HOUR).length, 1);
+  await bot.handle(bmOut('u1', 7, 2, 'Подпишу до 17:00', T0 + 60000));
+  assert.strictEqual(db.pendingReplies(T0 + 4 * HOUR).length, 0);
+  assert.strictEqual(db.feed(1, 0).length, 1);                                  // только входящее
+  assert.strictEqual(db.allSince(1, 0).length, 2);                              // оба — для поиска
+  await bot.handle(bmOut('u1', 999, 3, 'пишу в чат, которого слой не знает', T0));   // неизвестный чат не сохраняем
+  assert.strictEqual(db.allSince(1, 0).length, 2);
+});
+
+test('«Ты не ответил»: через 3 ч, потом через 9 ч, не больше двух раз; не ночью; отвеченное, отложенное и выключенное — нет', async () => {
+  const clock = { t: T0 };
+  const { db, tg, bot } = setup(new Set([1]), 555, clock);
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  await bot.handle(bmIn('u1', 7, 1, 'Подпиши акт до 18:00'));
+  await bot.handle(bmIn('u1', 8, 2, 'Скинь файл до пятницы'));
+  await bot.handle(bmOut('u1', 8, 3, 'скинул', T0 + 1000));                                   // этот чат отвечен
+  const base = { db, tg, openBtn: bot.openBtn, tz: 'Europe/Moscow' };
+  const n0 = tg.calls.length;
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 2 * HOUR }), 0);                // рано
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 3 * HOUR }), 1);                // 17:12 — напомнили про Чат7
+  const r = tg.calls.at(-1); assert.match(r.params.text, /Ты не ответил/); assert.match(r.params.text, /Чат7/); assert.doesNotMatch(r.params.text, /Чат8/);
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 4 * HOUR }), 0);                // повтор раньше срока — нет
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 12 * HOUR }), 0);              // 02:12 ночью — тишина
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 18 * HOUR }), 1);              // 08:12 утром — второе напоминание
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 40 * HOUR }), 0);              // больше двух раз не напоминаем
+  assert.strictEqual(tg.calls.length - n0, 2);
+  // выключенный слой и отложенное
+  await bot.handle(bmIn('u1', 9, 4, 'Позвони мне', T0 + 20 * HOUR));
+  db.setSettings(1, { layers: { remind: false } });
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 24 * HOUR }), 0);
+  db.setSettings(1, {}); db.snooze(1, db.findMessage('u1', 9, 4).id, T0 + 30 * HOUR);
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 + 25 * HOUR }), 0);
+});
+
+test('тихие часы и ★ важные люди: ночью обычные просьбы молчат, ★ — всегда; любое сообщение ★ уведомляет', async () => {
+  const clock = { t: new Date('2026-11-18T02:30:00+03:00').getTime() };
+  const { db, tg, bot } = setup(new Set(), 555, clock);
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  const n0 = tg.calls.length;
+  await bot.handle(bmIn('u1', 7, 1, 'Подпиши акт до 18:00', clock.t));                         // ночью, не ★ — молчим
+  assert.strictEqual(tg.calls.length, n0); assert.strictEqual(db.feed(1, 0).length, 1);          // но в ленте он есть
+  db.setSettings(1, { vip: [8] });
+  await bot.handle(bmIn('u1', 8, 2, 'Привет!', clock.t));                                        // ★: даже «Привет» и даже ночью
+  assert.match(tg.calls.at(-1).params.text, /★ Чат8/);
+  db.setSettings(1, { layers: { quiet: false }, vip: [8] });                                      // тихие часы выключены
+  await bot.handle(bmIn('u1', 9, 3, 'Позвони мне', clock.t));
+  assert.match(tg.calls.at(-1).params.text, /RADAR · Чат9/);
+});
+
+test('«Спроси слой»: поиск по имени и словам, «что я обещал Дане», «вчера», «на прошлой неделе»', () => {
+  const day = 86400000;
+  const row = (id, name, text, ts, out = 0) => ({ id, chat_name: name, text, ts, out, deleted_at: 0 });
+  const rows = [
+    row(1, 'Даня М.', 'Подпиши акт до 18:00', T0 - 2 * HOUR), row(2, 'Даня М.', 'Подпишу до 17:00, скину скан', T0 - HOUR, 1),
+    row(3, 'Маша', 'Скинь конспект по матану', T0 - day), row(4, 'Мама', 'Купить хлеб?', T0 - 10 * day), row(5, 'Маша', 'привет', T0 - 2 * HOUR),
+  ];
+  const ask = (q) => insights.search(rows, q, { now: T0 });
+  const promised = ask('Что я обещал Дане?');
+  assert.strictEqual(promised[0].id, 2); assert.ok(promised.every((r) => r.name === 'Даня М.'));    // мои слова — первыми
+  assert.deepStrictEqual(ask('конспект').map((r) => r.id), [3]);                                    // по словам
+  assert.deepStrictEqual(ask('что писала Маша вчера').map((r) => r.id), [3]);                      // «вчера»
+  assert.deepStrictEqual(ask('хлеб на прошлой неделе').map((r) => r.id), [4]);
+  assert.deepStrictEqual(ask('что-то совсем другое'), []);
+  assert.deepStrictEqual(ask('что я'), []);                                                         // только «стоп-слова» — пусто
+});
+
+test('Неделя в цифрах: получено / важное / тишина / ответов / среднее время ответа', () => {
+  const rows = [
+    { ts: T0 - HOUR, level: 'act', out: 0, answered_at: T0 - HOUR + 30 * 60000 }, { ts: T0 - 2 * HOUR, level: 'quiet', out: 0, answered_at: 0 },
+    { ts: T0 - 3 * HOUR, level: 'know', out: 0, answered_at: T0 - 3 * HOUR + 90 * 60000 }, { ts: T0 - 30 * HOUR, level: 'act', out: 0, answered_at: 0 }, { ts: T0, level: 'out', out: 1 },
+  ];
+  const w = insights.weekStats(rows, { now: T0 });
+  assert.strictEqual(w.received, 4); assert.strictEqual(w.important, 3); assert.strictEqual(w.quiet, 1); assert.strictEqual(w.sent, 1);
+  assert.strictEqual(w.answered, 2); assert.strictEqual(w.avgReplyMin, 60); assert.strictEqual(w.days.length, 7);
+  assert.strictEqual(w.days.reduce((a, d) => a + d.total, 0), 4);
+});
+
+test('API: ★ важный человек, поиск, неделя; чужие данные не видны', async () => {
+  await withServer(async ({ base, bot }) => {
+    await bot.handle({ business_connection: { id: 'bc9', user: { id: 42 }, user_chat_id: 9, is_enabled: true } });
+    await bot.handle(bmIn('bc9', 7, 1, 'Подпиши акт до 18:00', T0 - 60000)); await bot.handle(bmOut('bc9', 7, 2, 'Подпишу до 17:00', T0 - 1000, 42));   // оба «в прошлом» относительно часов сервера
+    const post = (path, o, id = 42) => fetch(base + path, { method: 'POST', headers: authH(id), body: JSON.stringify(o) });
+    assert.strictEqual((await post('/api/vip', { chatId: 7, on: true })).status, 200);
+    assert.strictEqual((await post('/api/vip', { chatId: 'x', on: true })).status, 400);
+    const feed = await (await fetch(base + '/api/feed', { headers: authH(42) })).json();
+    assert.strictEqual(feed.messages[0].vip, true); assert.strictEqual(feed.messages[0].chatId, 7);
+    const found = await (await post('/api/ask', { q: 'что я обещал Чат7' })).json();
+    assert.strictEqual(found.results[0].out, true); assert.match(found.results[0].text, /17:00/);
+    assert.deepStrictEqual((await (await post('/api/ask', { q: 'Чат7' }, 99)).json()).results, []);   // чужому пусто
+    assert.strictEqual((await post('/api/ask', { q: '' })).status, 400);
+    const w = await (await fetch(base + '/api/week', { headers: authH(42) })).json();
+    assert.strictEqual(w.received, 1); assert.strictEqual(w.sent, 1);
+    await post('/api/vip', { chatId: 7, on: false });
+    assert.strictEqual((await (await fetch(base + '/api/feed', { headers: authH(42) })).json()).messages[0].vip, false);
+  });
+});
+
+test('резервная копия и оповещения: копия базы, хранится 7, /backup только админу; оповещение не чаще раза в 10 минут', async () => {
+  const os = require('node:os'), fs = require('node:fs'), path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sloy-bk-'));
+  const { db, tg, bot } = setup(new Set([1]), 555, { t: T0 }, () => alertsMod.makeBackup(db, dir, T0));
+  db.upsertUser(1, T0);
+  const f = alertsMod.makeBackup(db, dir, T0);
+  assert.ok(fs.existsSync(f)); assert.match(path.basename(f), /^sloy-2026-11-17\.db$/);
+  const copy = require('../server/db').openDb(f); assert.strictEqual(copy.getUser(1).id, 1);   // копия — рабочая база
+  for (let d = 1; d <= 9; d++) alertsMod.makeBackup(db, dir, T0 + d * 86400000);
+  assert.strictEqual(fs.readdirSync(dir).filter((x) => /\.db$/.test(x)).length, 7);
+  await bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/backup' } });
+  assert.strictEqual(tg.calls.at(-1).method, 'sendDocument'); assert.strictEqual(tg.calls.at(-1).field, 'document');
+  const n = tg.calls.length;
+  await bot.handle({ message: { chat: { id: 2 }, from: { id: 2 }, text: '/backup' } });
+  assert.strictEqual(tg.calls.length, n);                                                       // не админ — ничего
+  let t = T0; const sent = []; const alert = alertsMod.createAlerter({ tg: { call: async (m, p) => sent.push(p) }, adminIds: new Set([1]), now: () => t });
+  assert.strictEqual(await alert('упал'), true); assert.strictEqual(await alert('снова'), false);
+  t += 11 * 60000; assert.strictEqual(await alert('ещё'), true); assert.strictEqual(sent.length, 2);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

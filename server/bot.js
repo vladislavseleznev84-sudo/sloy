@@ -2,6 +2,7 @@
 const { analyze } = require('./analyze');
 const { PLANS, PERIOD_MS, activePlan } = require('./plans');
 const { buildRecap } = require('./recap');
+const { inQuiet } = require('./reminders');
 
 const TERMS = 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.';
 const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что случилось, — ответим. [впишите контакт поддержки]';
@@ -9,7 +10,7 @@ const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что сл
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Чат';
 
-function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, now = () => Date.now() }) {
+function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, backup = null, now = () => Date.now() }) {
   // Предохранитель от спама: не больше 8 уведомлений за 10 минут на человека.
   const sent = new Map();
   const mayNotify = (userId) => {
@@ -45,10 +46,17 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
   async function onBusinessMessage(m) {
     const conn = db.getConnection(m.business_connection_id);
     if (!conn || !conn.enabled) return;
-    if (m.from && m.from.id === conn.user_id) return;          // свои исходящие не разбираем
-    // Сообщения ботов и чат с самим ботом не разбираем — иначе уведомления превращаются в бесконечный цикл.
+    if (botId && m.chat && m.chat.id === botId) return;        // чат с самим ботом не разбираем — иначе уведомления превращаются в бесконечный цикл
+    const ts = (m.date || Math.floor(now() / 1000)) * 1000;
+    // Собственное сообщение владельца: закрывает ждущие ответа сообщения этого чата и сохраняется для поиска («что я обещал…»).
+    if (m.from && m.from.id === conn.user_id) {
+      db.markAnswered(conn.id, m.chat.id, ts);
+      if (typeof m.text === 'string' && db.hasChat(conn.user_id, m.chat.id)) {
+        db.addMessage({ user_id: conn.user_id, conn_id: conn.id, chat_id: m.chat.id, chat_name: chatName(m.chat), tg_msg_id: m.message_id, text: m.text, ts, level: 'out', analysis: {}, out: true });
+      }
+      return;
+    }
     if (m.from && (m.from.is_bot || (botId && m.from.id === botId))) return;
-    if (botId && m.chat && m.chat.id === botId) return;
     if (typeof m.text !== 'string') return;                    // MVP: только текст
     // Лимит чатов по тарифу: новый чат сверх лимита не обрабатываем (админ — без лимита).
     const plan = activePlan(db.getUser(conn.user_id), now(), adminIds.has(conn.user_id));
@@ -56,14 +64,19 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     const analysis = analyze(m.text, { now: now(), tz });
     const id = db.addMessage({
       user_id: conn.user_id, conn_id: conn.id, chat_id: m.chat.id, chat_name: chatName(m.chat), tg_msg_id: m.message_id,
-      text: m.text, ts: (m.date || Math.floor(now() / 1000)) * 1000, level: analysis.level, analysis,
+      text: m.text, ts, level: analysis.level, analysis,
     });
-    const layers = (db.getSettings(conn.user_id).layers) || {};
-    if (id && analysis.level === 'act' && layers.radar !== false && mayNotify(conn.user_id)) {
-      await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
-        text: `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : ''),
-        reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
+    if (!id) return;
+    // Кого и когда уведомлять: важные люди (★) — всегда и сразу; остальные — только просьбы и сроки, не ночью, с предохранителем.
+    const st = db.getSettings(conn.user_id), layers = st.layers || {};
+    if (layers.radar === false) return;
+    const vip = (st.vip || []).includes(m.chat.id);
+    let body = null;
+    if (vip) body = `<b>★ ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>`;
+    else if (analysis.level === 'act' && !inQuiet(st, now(), tz) && mayNotify(conn.user_id)) {
+      body = `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : '');
     }
+    if (body) await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML', text: body, reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
   }
 
   // «След»: уведомления об изменённых и удалённых сообщениях (только те, что слой уже видел).
@@ -109,6 +122,10 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML',
         text: '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\nПодключи меня: Настройки → Telegram Business → Чат-боты.',
         reply_markup: openBtn('Открыть СЛОЙ') });
+    }
+    if (/^\/backup/.test(text) && adminIds.has(m.from.id) && backup) {
+      const file = backup();
+      return tg.upload('sendDocument', { chat_id: m.chat.id, caption: 'Резервная копия базы СЛОЙ. Храните в надёжном месте: внутри личные сообщения.' }, 'document', file);
     }
     if (/^\/recap/.test(text)) {
       const r = buildRecap(db, m.from.id, now(), botId);
