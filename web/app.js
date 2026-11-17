@@ -151,11 +151,23 @@
       '<line class="sweep" x1="173" y1="180" x2="173" y2="30" stroke="#C4FF2E" stroke-width="1.5" opacity=".75"/>' + blips + labels + '</svg>';
   }
 
-  function onbDone() { try { return !!localStorage.getItem('sloy.onb'); } catch (e) { return true; } }
+  function onbVer() { return '2'; }   // версия знакомства: при изменении текста — поднять, и все увидят заново
+  function onbDone() { try { return localStorage.getItem('sloy.onb') === onbVer(); } catch (e) { return true; } }
   var ONB = [
-    ['Слой подчёркивает важное', 'Я читаю чаты, которые ты выбрал, и отмечаю то, что нельзя пропустить: сроки, просьбы, личное. Остальное — тишина.', '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="20" width="200" height="22" fill="currentColor" opacity=".18"/><rect x="20" y="52" width="200" height="22" fill="currentColor" opacity=".18"/><rect class="slab" x="46" y="52" width="120" height="22" fill="#C4FF2E"/><rect x="20" y="84" width="200" height="22" fill="currentColor" opacity=".1"/></svg>'],
-    ['Ты управляешь', 'Свайп вправо — ответить, влево — отложить. Подсказки ответов подбираются по смыслу, а отправить их можно только твоим тапом.', '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="40" y="30" width="160" height="70" rx="6" fill="currentColor" opacity=".16"/><path d="M12 65H34M24 55L34 65L24 75" stroke="#C4FF2E" stroke-width="3" fill="none"/><path d="M228 65H206M216 55L206 65L216 75" stroke="#6E8BFF" stroke-width="3" fill="none"/></svg>'],
-    ['Всё под твоим контролем', 'Слой видит только выбранные тобой чаты и только новое. Память и сохранённые сообщения можно стереть одним тапом.', '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><circle cx="120" cy="65" r="44" fill="none" stroke="currentColor" stroke-width="3" opacity=".3"/><path d="M120 21A44 44 0 1 0 164 65" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="120" cy="65" r="12" fill="#C4FF2E"/></svg>'],
+    ['Слой подчёркивает важное', 'Я читаю чаты, которые ты выбрал, и отмечаю то, что нельзя пропустить: сроки, просьбы, личное. Остальное — тишина.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="20" width="200" height="22" fill="currentColor" opacity=".18"/><rect x="20" y="52" width="200" height="22" fill="currentColor" opacity=".18"/><rect class="slab" x="46" y="52" width="120" height="22" fill="#C4FF2E"/><rect x="20" y="84" width="200" height="22" fill="currentColor" opacity=".1"/></svg>'],
+    ['Свайпы и умные ответы', 'Вправо — ответить, влево — отложить на 3 часа. На «Я тебя люблю» подскажу «Я тебя тоже». Отправится только после твоего тапа.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="8" width="150" height="36" rx="12" fill="currentColor" opacity=".18"/><rect x="20" y="58" width="62" height="26" rx="13" fill="#C4FF2E"/><rect x="90" y="58" width="50" height="26" rx="13" fill="currentColor" opacity=".2"/><rect x="148" y="58" width="72" height="26" rx="13" fill="currentColor" opacity=".2"/><path d="M14 108H50M24 98L14 108L24 118" stroke="#C4FF2E" stroke-width="3" fill="none"/><path d="M226 108H190M216 98L226 108L216 118" stroke="#6E8BFF" stroke-width="3" fill="none"/></svg>'],
+    ['Важные люди и тихие часы', 'Отметь человека ★ — сообщу сразу и даже ночью. С 23:00 до 08:00 все остальные уведомления молчат, но ничего не теряется.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><path d="M70 14L81 42L112 45L88 65L96 96L70 80L44 96L52 65L28 45L59 42Z" fill="#C4FF2E"/><path d="M178 22A42 42 0 1 0 204 96A32 32 0 1 1 178 22Z" fill="currentColor" opacity=".8"/></svg>'],
+    ['Ты не ответил', 'Если важное сообщение ждёт ответа больше 3 часов, напомню. Не больше двух раз и не ночью. Ответил в чате — напоминание отменяется.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><circle cx="90" cy="65" r="46" fill="none" stroke="currentColor" stroke-width="4" opacity=".35"/><path d="M90 65V36M90 65L110 78" stroke="#C4FF2E" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="90" cy="65" r="5" fill="currentColor"/><rect x="156" y="40" width="64" height="22" rx="11" fill="#C4FF2E"/><rect x="156" y="70" width="46" height="14" rx="7" fill="currentColor" opacity=".2"/></svg>'],
+    ['След: удалили или изменили', 'Если человек удалил или поправил сообщение, покажу, что там было, когда отправлено и когда исправлено. Можно выключить в «Слоях».',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="28" width="190" height="20" rx="3" fill="currentColor" opacity=".2"/><rect x="20" y="37" width="190" height="3" fill="#FF6A4D"/><rect x="20" y="66" width="140" height="20" rx="3" fill="#C4FF2E"/><rect x="20" y="96" width="90" height="8" rx="3" fill="currentColor" opacity=".18"/></svg>'],
+    ['Итоги и поиск', 'В 21:00 пришлю итоги дня. На вкладке «Память» — неделя в цифрах. А в «Спроси слой» можно найти, что ты обещал Дане или что писала Маша.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="80" width="20" height="30" fill="currentColor" opacity=".2"/><rect x="50" y="62" width="20" height="48" fill="currentColor" opacity=".2"/><rect x="80" y="90" width="20" height="20" fill="currentColor" opacity=".2"/><rect x="110" y="48" width="20" height="62" fill="currentColor" opacity=".2"/><rect x="140" y="70" width="20" height="40" fill="currentColor" opacity=".2"/><rect x="170" y="30" width="20" height="80" fill="#C4FF2E"/><circle cx="204" cy="34" r="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M214 44L226 56" stroke="currentColor" stroke-width="4"/></svg>'],
+    ['Всё под твоим контролем', 'Слой видит только выбранные тобой чаты и только новое. Каждый слой можно выключить, а память и сохранённое — стереть одним тапом.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><circle cx="120" cy="65" r="44" fill="none" stroke="currentColor" stroke-width="3" opacity=".3"/><path d="M120 21A44 44 0 1 0 164 65" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="120" cy="65" r="12" fill="#C4FF2E"/></svg>'],
   ];
   function onboarding() {
     var i = state.onbStep || 0, s = ONB[i], last = i === ONB.length - 1;
@@ -212,7 +224,7 @@
   }
   app.addEventListener('pointerup', endSwipe); app.addEventListener('pointercancel', endSwipe);
   app.addEventListener('click', function (e) { if (Date.now() < swipeBlockUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
-  function finishOnb() { state.showOnb = false; try { localStorage.setItem('sloy.onb', '1'); } catch (e) {} render(); }
+  function finishOnb() { state.showOnb = false; state.onbStep = 0; try { localStorage.setItem('sloy.onb', onbVer()); } catch (e) {} render(); }
   function runAsk() {
     var q = (state.askQ || '').trim(); if (!q) return;
     state.askBusy = true; render();
@@ -324,6 +336,7 @@
     return '<main class="screen"><h1 class="t">Слои</h1><p class="lead" style="font-size:19px;margin-top:6px">Что слой делает за тебя.</p><div style="margin-top:14px">' + rows + '</div>' + rights +
       (state.isAdmin ? '<button class="clear" data-go="#/admin" style="border-color:#C4FF2E;color:#C4FF2E">Админ-панель</button>' : '') +
       '<div class="m" style="margin:22px 0 0">Тема</div><div class="seg">' + [['auto', 'Как в Telegram'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(function (t) { return '<button class="chip' + (state.theme === t[0] ? ' on' : '') + '" data-act="theme" data-id="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+      '<button class="clear" data-act="onbshow">Показать знакомство снова</button>' +
       '<button class="clear" data-go="#/paywall">' + (state.isAdmin ? 'Тариф: админ — всё включено' : 'Мой билет · СЛОЙ') + '</button></main>' + tabs('layers');
   }
 
@@ -454,6 +467,7 @@
     if (act === 'theme') { state.theme = el.dataset.id; try { localStorage.setItem('sloy.theme', state.theme); } catch (e) {} applyTheme(); haptic(); render(); return; }
     if (act === 'nextreply') { state.replyIdx[el.dataset.id] = (state.replyIdx[el.dataset.id] || 0) + 1; state.editing = false; haptic(); render(); return; }
     if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { finishOnb(); } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
+    if (act === 'onbshow') { state.showOnb = true; state.onbStep = 0; haptic(); if (location.hash === '#/' || location.hash === '') render(); else location.hash = '#/'; return; }
     if (act === 'onbskip') { finishOnb(); return; }
     if (act === 'askex') { state.askQ = el.dataset.q; runAsk(); return; }
     if (act === 'askgo') { var inp = document.getElementById('askQ'); state.askQ = inp ? inp.value : state.askQ; runAsk(); return; }
