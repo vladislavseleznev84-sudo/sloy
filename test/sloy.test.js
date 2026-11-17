@@ -100,6 +100,9 @@ test('бот отвечает на /terms и /support', async () => {
   await bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/terms' } });
   await bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/support' } });
   assert.match(tg.calls[0].params.text, /Stars/); assert.match(tg.calls[1].params.text, /Поддержка/);
+  const sup = require('../server/bot').createBot({ tg, db: openDb(':memory:'), webappUrl: 'https://x', supportContact: 'helper_nick' });
+  await sup.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/support' } });
+  assert.match(tg.calls.at(-1).params.text, /@helper_nick/);
 });
 
 async function withServer(fn, adminIds = new Set([42])) {

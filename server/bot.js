@@ -5,13 +5,13 @@ const { buildRecap } = require('./recap');
 const { inQuiet } = require('./reminders');
 
 const TERMS = 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.';
-const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что случилось, — ответим. [впишите контакт поддержки]';
+const supportText = (c) => (c ? `Поддержка СЛОЯ: напиши @${c} — что случилось, ответим. Если что-то сломалось, приложи скриншот.` : 'Поддержка СЛОЯ: контакт пока не указан.');
 
 const CONNECT_TEXT = '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\n<b>Что нужно:</b> Telegram Premium — подключение ботов к чатам (Telegram Business) работает только с ним.\n\n<b>Как подключить:</b>\n1. Настройки → Telegram Business\n2. Чат-боты\n3. Укажи этого бота и выбери чаты\n\nКартинками — по кнопке ниже.';
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Чат';
 
-function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, backup = null, now = () => Date.now() }) {
+function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, backup = null, supportContact = '', now = () => Date.now() }) {
   // Предохранитель от спама: не больше 8 уведомлений за 10 минут на человека.
   const sent = new Map();
   const mayNotify = (userId) => {
@@ -150,7 +150,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
         payload: 'plan:' + plan.id + ':' + m.from.id, currency: 'XTR', prices: [{ label: plan.title + ' · 30 дней', amount: plan.stars }] });
     }
     if (/^\/terms/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: TERMS });
-    if (/^\/support/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: SUPPORT });
+    if (/^\/support/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: supportText(supportContact) });
   }
 
   async function onPaid(m) {

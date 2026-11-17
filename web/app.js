@@ -41,7 +41,7 @@
     if (!isLive()) return Promise.resolve();
     state.live = true; state.loaded = false; render();
     return api('GET', '/api/feed').then(function (r) {
-      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; state.botUsername = r.data.botUsername || ''; state.trial = r.data.trial || null; var sl = (r.data.settings || {}).layers; if (sl) { for (var k in sl) if (k in state.layers) state.layers[k] = !!sl[k]; saveLayers(); } }
+      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; state.botUsername = r.data.botUsername || ''; state.support = r.data.support || ''; state.trial = r.data.trial || null; var sl = (r.data.settings || {}).layers; if (sl) { for (var k in sl) if (k in state.layers) state.layers[k] = !!sl[k]; saveLayers(); } }
       else { toast('Не вышло загрузить ленту'); D.messages = []; D.facts = []; }
     }).catch(function () { toast('Нет связи с сервером'); D.messages = []; D.facts = []; })
       .then(function () { state.loaded = true; render(); });
@@ -340,7 +340,7 @@
     return '<main class="screen"><h1 class="t">Слои</h1><p class="lead" style="font-size:19px;margin-top:6px">Что слой делает за тебя.</p><div style="margin-top:14px">' + rows + '</div>' + rights +
       (state.isAdmin ? '<button class="clear" data-go="#/admin" style="border-color:#C4FF2E;color:#C4FF2E">Админ-панель</button>' : '') +
       '<div class="m" style="margin:22px 0 0">Тема</div><div class="seg">' + [['auto', 'Как в Telegram'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(function (t) { return '<button class="chip' + (state.theme === t[0] ? ' on' : '') + '" data-act="theme" data-id="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
-      '<button class="clear" data-go="#/connect">Как подключить слой</button><button class="clear" data-act="onbshow">Показать знакомство снова</button>' +
+      (state.support ? '<button class="clear" data-act="support">Написать в поддержку</button>' : '') + '<button class="clear" data-go="#/connect">Как подключить слой</button><button class="clear" data-act="onbshow">Показать знакомство снова</button>' +
       '<button class="clear" data-go="#/paywall">' + (state.isAdmin ? 'Тариф: админ — всё включено' : 'Мой билет · СЛОЙ') + '</button></main>' + tabs('layers');
   }
 
@@ -509,6 +509,7 @@
     if (act === 'nextreply') { state.replyIdx[el.dataset.id] = (state.replyIdx[el.dataset.id] || 0) + 1; state.editing = false; haptic(); render(); return; }
     if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { var goConnect = !(state.live && state.connected); finishOnb(); if (goConnect) location.hash = '#/connect'; } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
     if (act === 'onbshow') { state.showOnb = true; state.onbStep = 0; haptic(); if (location.hash === '#/' || location.hash === '') render(); else location.hash = '#/'; return; }
+    if (act === 'support') { var u = 'https://t.me/' + state.support; var t = tg(); if (t && t.openTelegramLink) t.openTelegramLink(u); else window.open(u, '_blank'); return; }
     if (act === 'connnext') { var cs = connectSteps(); if ((state.connStep || 0) >= cs.length - 1) { state.connStep = 0; haptic('medium'); location.hash = '#/'; } else { state.connStep = (state.connStep || 0) + 1; haptic(); render(); } return; }
     if (act === 'connprev') { state.connStep = Math.max(0, (state.connStep || 0) - 1); haptic(); render(); return; }
     if (act === 'copybot') { var v = el.dataset.v; try { navigator.clipboard.writeText(v).then(function () { toast('Скопировано: ' + v); }, function () { toast(v); }); } catch (e) { toast(v); } return; }

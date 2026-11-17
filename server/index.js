@@ -14,17 +14,18 @@ const webappUrl = need('WEBAPP_URL').replace(/\/$/, '');
 const db = openDb(process.env.DB_PATH || path.join(__dirname, '..', 'sloy.db'));
 const adminIds = new Set((process.env.ADMIN_IDS || '').split(',').map((x) => Number(x.trim())).filter(Boolean));
 const tg = createTelegram(botToken);
+const supportContact = String(process.env.SUPPORT_CONTACT || '').replace(/^@/, '').trim();   // ник поддержки: в .env, не в коде
 const alerts = require('./alerts');
 const alert = alerts.createAlerter({ tg, adminIds });   // оповещение админа о сбоях (не чаще раза в 10 минут)
 const dbFile = process.env.DB_PATH || path.join(__dirname, '..', 'sloy.db');
 const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(dbFile), 'backups');
 const doBackup = () => alerts.makeBackup(db, backupDir);
-const bot = createBot({ tg, db, webappUrl, adminIds, backup: doBackup, botId: Number(botToken.split(':')[0]), tz: process.env.TZ_NAME || 'Europe/Moscow' });
+const bot = createBot({ tg, db, webappUrl, adminIds, backup: doBackup, supportContact, botId: Number(botToken.split(':')[0]), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 const botId = Number(botToken.split(':')[0]);
 db.raw.prepare('DELETE FROM messages WHERE chat_id=?').run(botId);   // разовая чистка мусора от старого цикла
 let botUsername = '';
 tg.call('getMe').then((me) => { botUsername = me.username || ''; }).catch((e) => console.error('getMe:', e.message));
-const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, get botUsername() { return botUsername; }, onError: (t) => alert(t), webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
+const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, supportContact, get botUsername() { return botUsername; }, onError: (t) => alert(t), webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
 // Срок хранения сообщений: 30 дней (по умолчанию), чистим при запуске и раз в сутки.
 const keepDays = Number(process.env.KEEP_DAYS || 30);
