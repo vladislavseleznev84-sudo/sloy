@@ -58,7 +58,7 @@
   }
   function saveLayers() { try { localStorage.setItem('sloy.layers', JSON.stringify(state.layers)); } catch (e) {} }
   function msg(id) { return D.messages.filter(function (m) { return m.id === id; })[0]; }
-  var SYMBOL = function (s, c) { c = c || ['#EDEFE8', '#C4FF2E']; return '<svg viewBox="0 0 96 96" width="' + s + '" height="' + s + '" aria-hidden="true"><path d="M8 20a12 12 0 0 1 12-12H76a12 12 0 0 1 12 12V32H8Z" fill="' + c[0] + '"/><rect x="22" y="36" width="74" height="24" fill="' + c[1] + '"/><path d="M8 64H88V76a12 12 0 0 1-12 12H8Z" fill="' + c[0] + '"/></svg>'; };
+  var SYMBOL = function (s, c) { c = c || ['#EDEFE8', '#C4FF2E']; return '<svg viewBox="0 0 96 96" width="' + s + '" height="' + s + '" aria-hidden="true"><path d="M8 20a12 12 0 0 1 12-12H76a12 12 0 0 1 12 12V32H8Z" fill="' + c[0] + '"/><rect class="slab" x="22" y="36" width="74" height="24" fill="' + c[1] + '"/><path d="M8 64H88V76a12 12 0 0 1-12 12H8Z" fill="' + c[0] + '"/></svg>'; };
   var STAR = function (s, c) { return '<svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" aria-hidden="true"><path d="M12 2.5L14.9 8.6L21.5 9.4L16.6 14L17.9 20.6L12 17.3L6.1 20.6L7.4 14L2.5 9.4L9.1 8.6Z" fill="' + (c || 'currentColor') + '"/></svg>'; };
   var TICK = function (c) { return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="' + c + '" stroke-width="3" aria-hidden="true"><path d="M4 12L10 18L20 6"/></svg>'; };
   var CROSS = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#6B717D" stroke-width="3" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18"/></svg>';
@@ -75,10 +75,41 @@
       (pillText ? '<div class="pill"><i class="dot"></i>' + pillText + '</div>' : '') + '</div>';
   }
 
+  var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function hash(str) { var h = 0; for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); }
+  function countUps() {
+    document.querySelectorAll('[data-count]').forEach(function (el) {
+      var to = +el.dataset.count; if (REDUCED || !to) { el.textContent = to; return; }
+      var t0 = performance.now(), dur = 800;
+      (function f(t) { var k = Math.min(1, (t - t0) / dur); el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(f); })(t0);
+    });
+  }
+  function celebrate() {
+    if (REDUCED) return;
+    var o = document.createElement('div'); o.className = 'burst'; o.innerHTML = '<i></i><i></i><i></i>';
+    document.body.appendChild(o); setTimeout(function () { o.remove(); }, 1500);
+  }
+  window.SLOY_celebrate = celebrate;
+  function radarSvg(list) {
+    var blips = '', labels = '';
+    list.forEach(function (m, i) {
+      var h = hash(m.id + m.name), ang = (-68 + (h % 136)) * Math.PI / 180;
+      var r = m.level === 'act' ? 55 + (hash(m.id + 'r') % 55) : 105 + (hash(m.id + 'k') % 40);
+      var x = (173 + r * Math.sin(ang)).toFixed(1), y = (180 - r * Math.cos(ang)).toFixed(1);
+      var act = m.level === 'act';
+      blips += '<circle class="blip" style="animation-delay:' + (0.5 + i * 0.18) + 's,' + (1 + i * 0.3) + 's" cx="' + x + '" cy="' + y + '" r="' + (act ? 6 : 4) + '" fill="' + (act ? '#C4FF2E' : '#6E8BFF') + '"/>';
+      if (act) labels += '<text class="rlabel" style="animation-delay:' + (0.8 + i * 0.18) + 's" x="' + (+x + 11) + '" y="' + (+y + 3) + '">' + esc(m.name.split(/[ \u00a0]/)[0].toUpperCase()) + '</text>';
+    });
+    return '<svg class="radar-svg" viewBox="0 0 346 190" width="100%" role="img" aria-label="Радар: ' + list.length + ' отмеченных сообщений">' +
+      '<path class="ring" d="M123 180A50 50 0 0 1 223 180"/><path class="ring" d="M73 180A100 100 0 0 1 273 180"/><path class="ring" d="M23 180A150 150 0 0 1 323 180"/>' +
+      '<path d="M0 180H346" stroke="#252A45" stroke-width="1.5" fill="none"/>' +
+      '<line class="sweep" x1="173" y1="180" x2="173" y2="30" stroke="#C4FF2E" stroke-width="1.5" opacity=".75"/>' + blips + labels + '</svg>';
+  }
+
   /* ---------- screens ---------- */
   function home() {
     var important = D.messages.filter(function (m) { return m.level !== 'quiet'; });
-    if (state.live && !state.loaded) return '<main class="screen">' + topbar('') + '<p class="lead">Секунду…</p></main>' + tabs('home');
+    if (state.live && !state.loaded) return '<main class="screen">' + topbar('') + '<div class="sk" aria-label="Загрузка"><i></i><i></i><i></i></div></main>' + tabs('home');
     if (state.live && important.length === 0) return homeEmpty();
     var notes = important.map(function (m) {
       var head = '<div class="row"><span class="src">' + esc(m.name) + ' · ' + m.time + '</span>' + (m.tag === 'Срочно' ? '<span class="src b">Срочно</span>' : '') + '</div>';
@@ -86,7 +117,7 @@
       return '<button class="pp" data-go="#/card/' + m.id + '" aria-label="Разбор: ' + esc(m.name) + '">' + head + '<div class="txt">' + segs(m.segs) + '</div>' + foot + '</button>';
     }).join('');
     return '<main class="screen">' + topbar('Слушаю ' + D.now.listening + ' чатов') +
-      '<div class="big"><div class="n">' + important.length + '</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800">важных</div><div class="m" style="margin-top:5px;line-height:1.5">из ' + D.now.total + ' новых<br>сегодня · ' + D.now.time + '</div></div></div>' +
+      '<div class="big hero"><svg class="ghost" viewBox="0 0 96 96" aria-hidden="true"><path d="M8 20a12 12 0 0 1 12-12H76a12 12 0 0 1 12 12V32H8Z"/><rect x="22" y="36" width="74" height="24"/><path d="M8 64H88V76a12 12 0 0 1-12 12H8Z"/></svg><div class="n" data-count="' + important.length + '">0</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800">важных</div><div class="m" style="margin-top:5px;line-height:1.5">из ' + D.now.total + ' новых<br>сегодня · ' + D.now.time + '</div></div></div>' +
       '<p class="lead">Я прошёлся по личным чатам. Вот что отметил.</p>' +
       '<div class="stack">' + notes + '</div>' +
       '<button class="ask" data-act="ask"><i>&gt;</i>Спроси слой: что я обещал…</button></main>' + tabs('home');
@@ -110,7 +141,7 @@
     return '<main class="screen">' +
       '<div class="top"><h1 class="t">RADAR</h1><div class="pill"><i class="dot"></i>Живой</div></div>' +
       '<p class="lead" style="font-size:19px;margin-top:8px">Подчёркиваю важное, остальное — тишина.</p>' +
-      '<div class="legend"><span><span class="hl" style="animation:none">Действие</span></span><span><span class="ul">Просто знай</span></span><span class="m" style="margin-left:auto">Личные ' + D.now.listening + ' из ' + D.now.of + '</span></div>' +
+      radarSvg(D.messages.filter(function (m) { return m.level !== 'quiet'; })) + '<div class="legend"><span><span class="hl" style="animation:none">Действие</span></span><span><span class="ul">Просто знай</span></span><span class="m" style="margin-left:auto">Личные ' + D.now.listening + ' из ' + D.now.of + '</span></div>' +
       '<div style="margin-top:12px">' + (rows || '<p class="lead" style="font-size:17px">Пока тишина. Слой слушает.</p>') + '</div>' +
       (D.quietCount ? '<div class="silent">…и ещё ' + D.quietCount + ' в тишине</div>' : '') +
       '<div class="pp group" style="transform:rotate(.4deg)"><div class="row"><div><span class="src b">Группы</span><div style="font-size:13.5px;line-height:1.4;margin-top:3px;font-weight:500">«Диплом» пока в тишине: слой видит группу, только если его туда добавили.</div></div><button class="btn-d" data-act="groups" style="flex:none">Как</button></div></div>' +
@@ -191,6 +222,7 @@
       default: html = notFound();
     }
     app.innerHTML = html;
+    countUps();
     syncBack();
   }
   window.addEventListener('hashchange', function () { state.editing = false; window.scrollTo(0, 0); render(); });
@@ -230,8 +262,8 @@
       var plan = D.plans.filter(function (p) { return p.id === state.plan; })[0];
       if (!plan.stars) { toast('Ты на Старте'); return; }
       window.Pay.start(plan, act === 'payweb' ? 'web' : 'stars').then(function (r) {
-        if (r.status === 'paid') { haptic('medium'); toast('Готово. Слой включён.'); }
-        else if (r.message) toast(r.message);
+        if (r.status === 'paid') { haptic('medium'); celebrate(); toast('Готово. Слой включён.'); }
+        else if (r.message) { if (r.status === 'demo') celebrate(); toast(r.message); }
         else if (r.status === 'cancelled') toast('Оплата отменена');
       });
     }
