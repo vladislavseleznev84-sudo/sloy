@@ -1,0 +1,25 @@
+# Запуск на любом сервере с Docker: docker compose up -d
+# Caddy сам получит HTTPS-сертификат для вашего домена.
+services:
+  sloy:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3000
+      DB_PATH: /data/sloy.db
+    volumes:
+      - sloy-data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [sloy]
+volumes:
+  sloy-data:
+  caddy-data:
