@@ -258,3 +258,6 @@ h1.t{font-family:Unbounded;font-weight:800;font-size:30px;letter-spacing:-.03em;
 .bar .all{background:var(--line2)}.bar .imp{background:var(--acid);left:22%!important;right:22%!important}
 [data-theme=light] .bar .imp{background:#0B0D14}
 @keyframes grow{to{transform:scaleY(1)}}
+
+/* знакомство: кнопка не растягивается (перебивает .btn.go) */
+.onb .btn.go.onb-btn{flex:none;height:54px;align-self:stretch}
