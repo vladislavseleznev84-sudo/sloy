@@ -4,7 +4,7 @@ window.SLOY_DATA = {
   now: { date: '17 ноября', time: '14:12', total: 47, listening: 6, of: 11 },
   messages: [
     {
-      id: 'dan', name: 'Даня М.', ini: 'ДМ', time: '14:02', level: 'act', tag: 'Срочно',
+      id: 'dan', chatId: 1, vip: false, name: 'Даня М.', ini: 'ДМ', time: '14:02', level: 'act', tag: 'Срочно',
       segs: ['Подпиши акт ', ['до 18:00', 'hl'], ', иначе сорвётся оплата'],
       fullSegs: ['Привет! Подпиши акт ', ['до 18:00', 'hl'], ', иначе бухгалтерия не пропустит ', ['оплату', 'ul']],
       note: 'срок — сегодня', ask: 'Подписать акт выполненных работ.',
@@ -14,7 +14,7 @@ window.SLOY_DATA = {
       replies: [{ tone: 'Деловой', text: 'Подпишу до 17:00, скину скан сюда.' }, { tone: 'Тепло', text: 'Сейчас подпишу, спасибо что напомнил!' }, { tone: 'Коротко', text: 'Сделаю до 17:00' }],
     },
     {
-      id: 'masha', name: 'Маша', ini: 'М', time: '12:48', level: 'act', tag: 'Дата',
+      id: 'masha', chatId: 2, vip: false, name: 'Маша', ini: 'М', time: '12:48', level: 'act', tag: 'Дата',
       segs: ['Скинь конспект по матану ', ['до пятницы', 'hl']],
       fullSegs: ['Скинь конспект по матану ', ['до пятницы', 'hl'], ', плиз'],
       edited: true, history: [{ text: 'Скинь конспект по матану до среды', time: '12:50' }],
@@ -25,7 +25,7 @@ window.SLOY_DATA = {
       replies: [{ tone: 'Тепло', text: 'Конечно, скину в четверг вечером!' }, { tone: 'Коротко', text: 'Скину в четверг' }, { tone: 'Деловой', text: 'Принял, пришлю до пятницы' }],
     },
     {
-      id: 'mama', name: 'Мама', ini: 'М', time: '12:15', level: 'know', tag: 'Личное',
+      id: 'mama', chatId: 3, vip: true, name: 'Мама', ini: 'М', time: '12:15', level: 'know', tag: 'Личное',
       segs: ['Ты когда ', ['приедешь', 'ul'], '? Купить что-нибудь?'],
       fullSegs: ['Ты когда ', ['приедешь', 'ul'], '? Купить что-нибудь?'],
       note: 'личное — не затеряется', ask: 'Ответить, когда приедешь.',
@@ -35,13 +35,13 @@ window.SLOY_DATA = {
       replies: [{ tone: 'Тепло', text: 'В субботу вечером. Ничего не надо, я куплю по дороге!' }, { tone: 'Коротко', text: 'В субботу' }, { tone: 'Тепло', text: 'Пока не знаю точно, напишу завтра' }],
     },
     {
-      id: 'misha', name: 'Миша', ini: 'М', time: '14:58', level: 'know', tag: 'Личное', deleted: true, deletedTime: '15:01', history: [],
+      id: 'misha', chatId: 4, vip: false, name: 'Миша', ini: 'М', time: '14:58', level: 'know', tag: 'Личное', deleted: true, deletedTime: '15:01', history: [],
       segs: ['Ты сможешь занять мне 5000?'], fullSegs: ['Ты сможешь занять мне 5000?'],
       note: 'удалил сообщение через 3 минуты', ask: 'Ответить.', deadline: 'Без срока', left: '', memory: '',
       replies: [{ tone: 'Коротко', text: 'Да' }, { tone: 'Коротко', text: 'Нет, не получится' }, { tone: 'Деловой', text: 'Сейчас посмотрю и отвечу' }],
     },
     {
-      id: 'kira', name: 'Кира', ini: 'К', time: '11:40', level: 'know', tag: 'Личное',
+      id: 'kira', chatId: 5, vip: true, name: 'Кира', ini: 'К', time: '11:40', level: 'know', tag: 'Личное',
       segs: ['Я тебя люблю'], fullSegs: ['Я тебя люблю'],
       note: 'приятное сообщение', ask: 'Ответить.', deadline: 'Без срока', left: '', memory: 'Кира пишет так, когда соскучилась.',
       reply: { tone: 'Тепло', text: 'Я тебя тоже люблю' },
@@ -63,6 +63,8 @@ window.SLOY_DATA = {
     { id: 'reply', name: 'REPLY', desc: 'Подсказываю ответ твоими словами.', on: true },
     { id: 'memory', name: 'MEMORY', desc: 'Помню, что ты обещал.', on: true },
     { id: 'recap', name: 'RECAP', desc: 'Каждый вечер в 21:00 — три строки.', on: true },
+    { id: 'remind', name: 'НАПОМИНАЛКА', desc: 'Напоминаю, если ты не ответил.', on: true },
+    { id: 'quiet', name: 'ТИХИЕ ЧАСЫ', desc: 'С 23:00 до 08:00 — без уведомлений.', on: true },
     { id: 'trace', name: 'СЛЕД', desc: 'Помню, что удалили или поменяли.', on: true },
     { id: 'auto', name: 'AUTOMATION', desc: 'Рутина сам: если — то. 2 правила на паузе.', on: false },
   ],

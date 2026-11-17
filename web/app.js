@@ -3,7 +3,7 @@
   var D = window.SLOY_DATA;
   var app = document.getElementById('app');
   var toastEl = document.getElementById('toast');
-  var state = { plan: 'sloy', editing: false, layers: loadLayers(), live: false, loaded: true, replyIdx: {}, snoozed: {}, theme: loadTheme() };
+  var state = { showOnb: !onbDone(), askQ: '', askRes: null, week: null, plan: 'sloy', editing: false, layers: loadLayers(), live: false, loaded: true, replyIdx: {}, snoozed: {}, theme: loadTheme() };
 
   /* ---------- живые данные (внутри Telegram) ---------- */
   function isLive() { var t = tg(); return !!(t && t.initData); }
@@ -13,6 +13,10 @@
       headers: { 'Authorization': 'tma ' + tg().initData, 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, data: j }; }); });
+  }
+  function loadWeek() {
+    if (!isLive()) { state.week = { received: 47, important: 5, quiet: 42, sent: 12, answered: 4, avgReplyMin: 38, days: [{ total: 9, important: 1 }, { total: 14, important: 2 }, { total: 6, important: 0 }, { total: 11, important: 1 }, { total: 17, important: 3 }, { total: 12, important: 2 }, { total: 47, important: 5 }] }; return; }
+    api('GET', '/api/week').then(function (r) { if (r.ok) { state.week = r.data; render(); } });
   }
   function loadAdminStats() {
     if (!isLive()) return;
@@ -104,9 +108,9 @@
     });
   }
   function updateNav() {
-    var name = route().name, tab = name === 'admin' ? 'layers' : name;
+    var name = route().name, tab = name === 'admin' ? 'layers' : name === 'ask' ? 'home' : name === 'week' ? 'memory' : name;
     var idx = NAV.map(function (n) { return n[0]; }).indexOf(tab);
-    navEl.hidden = idx < 0;
+    navEl.hidden = idx < 0 || (state.showOnb && name === 'home');
     if (idx < 0) return;
     navEl.querySelectorAll('button').forEach(function (b) { b.getAttribute('data-tab') === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
     navEl.querySelector('.ind').style.transform = 'translateX(' + (idx * 100) + '%)';
@@ -145,6 +149,21 @@
       '<path class="ring" d="M123 180A50 50 0 0 1 223 180"/><path class="ring" d="M73 180A100 100 0 0 1 273 180"/><path class="ring" d="M23 180A150 150 0 0 1 323 180"/>' +
       '<path class="ring" style="stroke-dasharray:none;stroke-dashoffset:0;animation:none" d="M0 180H346"/>' +
       '<line class="sweep" x1="173" y1="180" x2="173" y2="30" stroke="#C4FF2E" stroke-width="1.5" opacity=".75"/>' + blips + labels + '</svg>';
+  }
+
+  function onbDone() { try { return !!localStorage.getItem('sloy.onb'); } catch (e) { return true; } }
+  var ONB = [
+    ['Слой подчёркивает важное', 'Я читаю чаты, которые ты выбрал, и отмечаю то, что нельзя пропустить: сроки, просьбы, личное. Остальное — тишина.', '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="20" width="200" height="22" fill="currentColor" opacity=".18"/><rect x="20" y="52" width="200" height="22" fill="currentColor" opacity=".18"/><rect class="slab" x="46" y="52" width="120" height="22" fill="#C4FF2E"/><rect x="20" y="84" width="200" height="22" fill="currentColor" opacity=".1"/></svg>'],
+    ['Ты управляешь', 'Свайп вправо — ответить, влево — отложить. Подсказки ответов подбираются по смыслу, а отправить их можно только твоим тапом.', '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="40" y="30" width="160" height="70" rx="6" fill="currentColor" opacity=".16"/><path d="M12 65H34M24 55L34 65L24 75" stroke="#C4FF2E" stroke-width="3" fill="none"/><path d="M228 65H206M216 55L206 65L216 75" stroke="#6E8BFF" stroke-width="3" fill="none"/></svg>'],
+    ['Всё под твоим контролем', 'Слой видит только выбранные тобой чаты и только новое. Память и сохранённые сообщения можно стереть одним тапом.', '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><circle cx="120" cy="65" r="44" fill="none" stroke="currentColor" stroke-width="3" opacity=".3"/><path d="M120 21A44 44 0 1 0 164 65" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="120" cy="65" r="12" fill="#C4FF2E"/></svg>'],
+  ];
+  function onboarding() {
+    var i = state.onbStep || 0, s = ONB[i], last = i === ONB.length - 1;
+    return '<main class="screen onb"><div class="top"><div class="brand">' + SYMBOL(26) + '<b>СЛОЙ</b></div><button class="m" data-act="onbskip" style="padding:8px">Пропустить</button></div>' +
+      '<div class="onb-art">' + s[2] + '</div><h1 class="t" style="font-size:30px;line-height:1.1;margin-top:26px">' + s[0] + '</h1>' +
+      '<p class="lead" style="font-size:19px">' + s[1] + '</p>' +
+      '<div class="dots">' + ONB.map(function (x, k) { return '<i' + (k === i ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
+      '<button class="btn go onb-btn" data-act="onbnext">' + (last ? 'Понятно, начнём' : 'Дальше') + '</button></main>';
   }
 
   /* ---------- тема ---------- */
@@ -193,6 +212,20 @@
   }
   app.addEventListener('pointerup', endSwipe); app.addEventListener('pointercancel', endSwipe);
   app.addEventListener('click', function (e) { if (Date.now() < swipeBlockUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
+  function finishOnb() { state.showOnb = false; try { localStorage.setItem('sloy.onb', '1'); } catch (e) {} render(); }
+  function runAsk() {
+    var q = (state.askQ || '').trim(); if (!q) return;
+    state.askBusy = true; render();
+    var done = function (res) { state.askBusy = false; state.askRes = res; render(); };
+    if (!state.live) {                                                    // демо: простой поиск по тому, что на экране
+      var toks = q.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || [];
+      var res = D.messages.filter(function (m) { var t = (m.name + ' ' + m.segs.join('')).toLowerCase(); return toks.some(function (k) { return t.indexOf(k.slice(0, Math.max(3, k.length - 2))) >= 0; }); })
+        .map(function (m) { return { name: m.name, text: m.fullSegs ? m.fullSegs.map(function (s) { return typeof s === 'string' ? s : s[0]; }).join('') : m.segs.join(''), time: m.time, date: 'сегодня', out: false, deleted: !!m.deleted }; });
+      setTimeout(function () { done(res); }, 350); return;
+    }
+    api('POST', '/api/ask', { q: q }).then(function (r) { done(r.ok ? r.data.results : []); }).catch(function () { done([]); toast('Нет связи с сервером'); });
+  }
+  app.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.id === 'askQ') { state.askQ = e.target.value; runAsk(); } });
   function snoozeMsg(id, hours) {
     var done = function () { D.messages = D.messages.filter(function (m) { return m.id !== id; }); toast('Отложено на ' + hours + ' ч'); render(); };
     if (!state.live) { done(); return; }
@@ -215,7 +248,7 @@
     if (state.live && !state.loaded) return '<main class="screen">' + topbar('') + '<div class="sk" aria-label="Загрузка"><i></i><i></i><i></i></div></main>' + tabs('home');
     if (state.live && important.length === 0) return homeEmpty();
     var notes = important.map(function (m) {
-      var head = '<div class="row"><span class="src">' + esc(m.name) + ' · ' + m.time + '</span>' + (m.tag === 'Срочно' ? '<span class="src b">Срочно</span>' : '') + traceTag(m, 'src') + '</div>';
+      var head = '<div class="row"><span class="src">' + vipMark(m) + esc(m.name) + ' · ' + m.time + '</span>' + (m.tag === 'Срочно' ? '<span class="src b">Срочно</span>' : '') + traceTag(m, 'src') + '</div>';
       var foot = '<div class="row" style="margin-top:8px"><span class="note">' + esc(m.note) + '</span><span class="btn-d">Разбор</span></div>';
       return swipeWrap(m.id, '<button class="pp" data-go="#/card/' + m.id + '" aria-label="Разбор: ' + esc(m.name) + '">' + head + '<div class="txt">' + segs(m.segs) + '</div>' + foot + '</button>');
     }).join('');
@@ -223,7 +256,7 @@
       '<div class="big hero"><svg class="ghost" viewBox="0 0 96 96" aria-hidden="true"><path d="M8 20a12 12 0 0 1 12-12H76a12 12 0 0 1 12 12V32H8Z"/><rect x="22" y="36" width="74" height="24"/><path d="M8 64H88V76a12 12 0 0 1-12 12H8Z"/></svg><div class="n" data-count="' + important.length + '">0</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800">важных</div><div class="m" style="margin-top:5px;line-height:1.5">из ' + D.now.total + ' новых<br>сегодня · ' + D.now.time + '</div></div></div>' +
       '<p class="lead">Я прошёлся по личным чатам. Вот что отметил.</p>' +
       '<div class="stack">' + notes + '</div>' +
-      '<button class="ask" data-act="ask"><i>&gt;</i>Спроси слой: что я обещал…</button></main>' + tabs('home');
+      '<button class="ask" data-go="#/ask"><i>&gt;</i>Спроси слой: что я обещал…</button></main>' + tabs('home');
   }
 
   function homeEmpty() {
@@ -238,7 +271,7 @@
   function radar() {
     var rows = D.messages.map(function (m) {
       var quiet = m.level === 'quiet';
-      var inner = '<div class="av">' + esc(m.ini) + '</div><div style="flex:1;min-width:0"><div class="hd"><span class="nm">' + esc(m.name) + '</span><span class="m">' + m.time + '</span></div><div class="tx">' + segs(m.segs) + '</div>' + traceTag(m, 'tr') + '</div>';
+      var inner = '<div class="av">' + esc(m.ini) + '</div><div style="flex:1;min-width:0"><div class="hd"><span class="nm">' + vipMark(m) + esc(m.name) + '</span><span class="m">' + m.time + '</span></div><div class="tx">' + segs(m.segs) + '</div>' + traceTag(m, 'tr') + '</div>';
       var canOpen = !quiet || (m.replies && m.replies.length);
       if (!canOpen) return '<div class="chat q">' + inner + '</div>';
       return swipeWrap(m.id, '<button class="chat' + (quiet ? ' q soft' : '') + '" data-go="#/card/' + m.id + '">' + inner + '</button>');
@@ -270,13 +303,14 @@
       '<div class="txt" id="replyText" style="margin-top:6px"' + (state.editing ? ' contenteditable="true"' : '') + '>' + esc(rp.text) + '</div>' +
       '<div class="btns"><button class="btn" data-act="edit">' + (state.editing ? 'Готово' : 'Править') + '</button><button class="btn go" data-act="send" data-id="' + m.id + '">Отправить от меня</button></div>' +
       '<div class="fine">Уйдёт из твоего аккаунта только после тапа · окно ответа 24 ч</div></div>';
-    return '<main class="screen" style="padding-bottom:230px"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><div class="av" style="width:34px;height:34px;font-size:11px">' + esc(m.ini) + '</div><div><b style="font-weight:600;font-size:15px">' + esc(m.name) + '</b><div class="m" style="font-size:9.5px">Разбор сообщения · ' + m.time + '</div></div></div>' +
+    return '<main class="screen" style="padding-bottom:230px"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><div class="av" style="width:34px;height:34px;font-size:11px">' + esc(m.ini) + '</div><div><b style="font-weight:600;font-size:15px">' + esc(m.name) + '</b><div class="m" style="font-size:9.5px">Разбор сообщения · ' + m.time + '</div></div>' + vipBtn(m) + '</div>' +
       (m.deleted ? '<div class="m" style="margin-top:18px;color:#FF6A4D">Удалено в ' + esc(m.deletedTime) + ' · слой сохранил текст</div>' : '') + (m.edited && !m.deleted ? '<div class="m" style="margin-top:18px;color:var(--blue)">Сообщение изменили</div>' : '') + '<div class="bubble" style="margin-top:' + ((m.deleted || m.edited) ? 8 : 22) + 'px">' + segs(m.fullSegs || m.segs) + '<span class="m">' + m.time + '</span></div>' + (quietCard ? '' : arrows + notes) + '</main>' + composer;
   }
 
   function memory() {
     var facts = D.facts.map(function (f) { return '<div class="pp"><span class="src b">' + esc(f.t) + '</span><div class="txt" style="font-size:15px;margin-top:3px">' + esc(f.s) + '</div></div>'; }).join('');
     return '<main class="screen"><h1 class="t">Память</h1><p class="lead" style="font-size:19px;margin-top:8px">Что я о тебе помню. Ничего лишнего.</p>' +
+      '<button class="clear" data-go="#/week" style="margin:14px 0 0">Неделя в цифрах →</button>' +
       '<div class="stack">' + (facts || '<p class="lead" style="font-size:17px">Пока ничего не запомнил.</p>') + '</div><button class="clear" data-act="clear">Стереть память</button></main>' + tabs('memory');
   }
 
@@ -331,6 +365,48 @@
       '<div class="fine">Узнать ID человека: пусть напишет боту команду /id</div></main>' + tabs('layers');
   }
 
+  function vipMark(m) { return m.vip ? '★ ' : ''; }
+  function vipBtn(m) {
+    if (m.chatId == null) return '';
+    return '<button class="vipbtn' + (m.vip ? ' on' : '') + '" data-act="vip" data-chat="' + m.chatId + '" aria-pressed="' + !!m.vip + '" aria-label="Важный человек">★<span>' + (m.vip ? 'Важный' : 'Важный?') + '</span></button>';
+  }
+
+  function ask() {
+    var chips = ['что я обещал Дане?', 'что писала Маша вчера?', 'акт', 'конспект'].map(function (c) { return '<button class="chip" data-act="askex" data-q="' + esc(c) + '">' + esc(c) + '</button>'; }).join('');
+    var res = '';
+    if (state.askBusy) res = '<div class="sk"><i></i><i></i><i></i></div>';
+    else if (state.askRes && !state.askRes.length) res = '<p class="lead" style="font-size:18px">Ничего не нашёл. Попробуй другое слово или имя.</p>';
+    else if (state.askRes) res = '<div class="stack">' + state.askRes.map(function (r) {
+      return '<div class="pp"><div class="row"><span class="src">' + (r.out ? 'Ты → ' : '') + esc(r.name) + '</span><span class="src">' + esc(r.date || '') + ' ' + esc(r.time) + '</span></div><div class="txt" style="font-size:15px">' + esc(r.text) + '</div>' + (r.deleted ? '<div class="src del" style="margin-top:6px">удалено</div>' : '') + '</div>';
+    }).join('') + '</div>';
+    return '<main class="screen"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><h1 class="t" style="margin:0">Спроси слой</h1></div>' +
+      '<p class="lead" style="font-size:18px;margin-top:8px">Ищу по сохранённым сообщениям: по имени, словам и дням.</p>' +
+      '<input class="fld" id="askQ" placeholder="Например: что я обещал Дане?" value="' + esc(state.askQ) + '" enterkeyhint="search" autocomplete="off">' +
+      '<button class="btn go" data-act="askgo" style="margin-top:10px;width:100%;height:46px;border-radius:99px">Найти</button>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px">' + chips + '</div>' + res + '</main>' + tabs('home');
+  }
+
+  var DAYN = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  function week() {
+    var w = state.week;
+    if (!w) return '<main class="screen"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><h1 class="t" style="margin:0">Неделя</h1></div><div class="sk"><i></i><i></i><i></i></div></main>' + tabs('memory');
+    var cells = [['Получено', w.received], ['Важных', w.important], ['В тишине', w.quiet], ['Твоих ответов', w.sent]].map(function (c) {
+      return '<div class="pp" style="padding:12px 14px"><span class="src">' + c[0] + '</span><div class="u" style="font-size:28px;font-weight:800;margin-top:4px" data-count="' + c[1] + '">0</div></div>';
+    }).join('');
+    var max = Math.max(1, Math.max.apply(null, w.days.map(function (d) { return d.total; })));
+    var today = new Date().getDay();
+    var bars = w.days.map(function (d, i) {
+      var label = DAYN[(today - (6 - i) + 7 * 2) % 7];
+      return '<div class="bar"><div class="col"><i class="all" style="height:' + Math.round(d.total / max * 100) + '%;animation-delay:' + (i * 70) + 'ms"></i><i class="imp" style="height:' + Math.round(d.important / max * 100) + '%;animation-delay:' + (i * 70 + 120) + 'ms"></i></div><span class="m">' + label + '</span></div>';
+    }).join('');
+    var avg = w.avgReplyMin == null ? '—' : (w.avgReplyMin >= 60 ? Math.round(w.avgReplyMin / 60 * 10) / 10 + ' ч' : w.avgReplyMin + ' мин');
+    return '<main class="screen"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><h1 class="t" style="margin:0">Неделя</h1></div>' +
+      '<p class="lead" style="font-size:18px;margin-top:8px">Сколько шума слой убрал за семь дней.</p>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px">' + cells + '</div>' +
+      '<div class="m" style="margin:22px 0 8px">Сообщения по дням · <span style="color:var(--nav-active)">важные</span></div><div class="bars">' + bars + '</div>' +
+      '<div class="pp" style="margin-top:20px"><span class="src b">Среднее время ответа на важное</span><div class="u" style="font-size:26px;font-weight:800;margin-top:4px">' + avg + '</div><div class="note" style="margin-top:4px">ответов на важное: ' + w.answered + '</div></div></main>' + tabs('memory');
+  }
+
   function notFound() { return '<main class="screen"><h1 class="t">Тишина</h1><p class="lead">Такого экрана нет.</p><button class="clear" data-go="#/">На главную</button></main>'; }
 
   /* ---------- router ---------- */
@@ -345,12 +421,14 @@
   function render() {
     var r = route(), html;
     switch (r.name) {
-      case 'home': html = home(); break;
+      case 'home': html = state.showOnb ? onboarding() : home(); break;
       case 'radar': html = radar(); break;
       case 'card': html = card(r.id); break;
       case 'memory': html = memory(); break;
       case 'layers': html = layers(); break;
       case 'paywall': html = paywall(); break;
+      case 'ask': html = ask(); break;
+      case 'week': if (!state.week) loadWeek(); html = week(); break;
       case 'admin': html = admin(); if (state.isAdmin && !state.adminStats) loadAdminStats(); break;
       default: html = notFound();
     }
@@ -359,7 +437,7 @@
     countUps();
     syncBack();
   }
-  window.addEventListener('hashchange', function () { state.editing = false; window.scrollTo(0, 0); render(); });
+  window.addEventListener('hashchange', function () { state.editing = false; if (route().name === 'week') state.week = null; window.scrollTo(0, 0); render(); });
   window.addEventListener('load', function () { initTg(); loadFeed(); });
 
   /* ---------- actions ---------- */
@@ -375,6 +453,17 @@
     }
     if (act === 'theme') { state.theme = el.dataset.id; try { localStorage.setItem('sloy.theme', state.theme); } catch (e) {} applyTheme(); haptic(); render(); return; }
     if (act === 'nextreply') { state.replyIdx[el.dataset.id] = (state.replyIdx[el.dataset.id] || 0) + 1; state.editing = false; haptic(); render(); return; }
+    if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { finishOnb(); } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
+    if (act === 'onbskip') { finishOnb(); return; }
+    if (act === 'askex') { state.askQ = el.dataset.q; runAsk(); return; }
+    if (act === 'askgo') { var inp = document.getElementById('askQ'); state.askQ = inp ? inp.value : state.askQ; runAsk(); return; }
+    if (act === 'vip') {
+      var cid = Number(el.dataset.chat), on = el.getAttribute('aria-pressed') !== 'true';
+      D.messages.forEach(function (m) { if (m.chatId === cid) m.vip = on; }); haptic('medium'); render();
+      toast(on ? 'Важный человек: всегда сообщу сразу' : 'Больше не важный');
+      if (state.live) api('POST', '/api/vip', { chatId: cid, on: on }).catch(function () {});
+      return;
+    }
     if (act === 'adminplan') { state.adminPlan = el.dataset.id; haptic(); render(); return; }
     if (act === 'admingrant') {
       var uid = (document.getElementById('adminUid') || {}).value, days = (document.getElementById('adminDays') || {}).value;
