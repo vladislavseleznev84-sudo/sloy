@@ -24,6 +24,8 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
   async function handle(update) {
     if (update.business_connection) return onConnection(update.business_connection);
     if (update.business_message) return onBusinessMessage(update.business_message);
+    if (update.edited_business_message) return onEdited(update.edited_business_message);
+    if (update.deleted_business_messages) return onDeleted(update.deleted_business_messages);
     if (update.pre_checkout_query) return tg.call('answerPreCheckoutQuery', { pre_checkout_query_id: update.pre_checkout_query.id, ok: true });
     if (update.message) return onMessage(update.message);
   }
@@ -61,6 +63,42 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
         text: `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : ''),
         reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
+    }
+  }
+
+  // «След»: уведомления об изменённых и удалённых сообщениях (только те, что слой уже видел).
+  const hhmm = (ts) => new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(ts);
+  const traceOn = (userId) => ((db.getSettings(userId).layers) || {}).trace !== false;
+  const quote = (t) => `<blockquote>${esc(String(t).slice(0, 900))}</blockquote>`;
+
+  async function onEdited(m) {
+    const conn = db.getConnection(m.business_connection_id);
+    if (!conn || !conn.enabled || typeof m.text !== 'string') return;
+    if (m.from && (m.from.id === conn.user_id || m.from.is_bot || (botId && m.from.id === botId))) return;
+    const row = db.findMessage(conn.id, m.chat.id, m.message_id);
+    if (!row || row.text === m.text) return;                       // неизвестное сообщение или правка без смены текста
+    const history = JSON.parse(row.history || '[]'); history.push({ text: row.text, at: now() });
+    const analysis = analyze(m.text, { now: now(), tz });
+    db.markEdited(row.id, m.text, analysis, analysis.level, history, now());
+    if (traceOn(conn.user_id) && mayNotify(conn.user_id)) {
+      await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
+        text: `<b>Изменено · ${esc(row.chat_name)}</b>\nНаписано ${hhmm(row.ts)}, изменено ${hhmm(now())}\nБыло:\n${quote(row.text)}Стало:\n${quote(m.text)}`,
+        reply_markup: openBtn('Открыть', 'card/' + row.id) });
+    }
+  }
+
+  async function onDeleted(d) {
+    const conn = db.getConnection(d.business_connection_id);
+    if (!conn || !conn.enabled) return;
+    for (const mid of d.message_ids || []) {
+      const row = db.findMessage(conn.id, d.chat.id, mid);
+      if (!row || row.deleted_at) continue;                         // слой это сообщение не видел — показать нечего
+      db.markDeleted(row.id, now());
+      if (traceOn(conn.user_id) && mayNotify(conn.user_id)) {
+        await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
+          text: `<b>Удалено · ${esc(row.chat_name)}</b>\nОтправлено ${hhmm(row.ts)}, удалено ${hhmm(now())}\n${quote(row.text)}`,
+          reply_markup: openBtn('Открыть', 'card/' + row.id) });
+      }
     }
   }
 

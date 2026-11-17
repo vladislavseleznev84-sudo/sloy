@@ -232,3 +232,9 @@ h1.t{font-family:Unbounded;font-weight:800;font-size:30px;letter-spacing:-.03em;
 
 /* тема: переключатель */
 .seg{display:flex;gap:8px;margin-top:10px}
+
+/* след: удалено / изменено */
+.src.del{color:#C2381F}.src.edit{color:var(--blue-on-paper)}
+.tr{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;margin-top:4px;color:var(--blue)}
+.tr.del{color:#FF6A4D}
+[data-theme=light] .tr.del{color:#C2381F}

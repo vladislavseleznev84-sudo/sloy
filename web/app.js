@@ -200,6 +200,12 @@
   }
 
   /* ---------- screens ---------- */
+  // «След»: метка удалено / изменено.
+  function traceTag(m, cls) {
+    if (m.deleted) return '<span class="' + cls + ' del">удалено' + (m.deletedTime ? ' ' + esc(m.deletedTime) : '') + '</span>';
+    if (m.edited) return '<span class="' + cls + ' edit">изменено</span>';
+    return '';
+  }
   // Обёртка со свайпом: вправо — ответить, влево — отложить на 3 часа.
   function swipeWrap(id, inner) {
     return '<div class="swipe" data-swipe="' + esc(id) + '"><div class="under"><i>Ответить →</i><i>← Отложить на 3 ч</i></div>' + inner + '</div>';
@@ -209,7 +215,7 @@
     if (state.live && !state.loaded) return '<main class="screen">' + topbar('') + '<div class="sk" aria-label="Загрузка"><i></i><i></i><i></i></div></main>' + tabs('home');
     if (state.live && important.length === 0) return homeEmpty();
     var notes = important.map(function (m) {
-      var head = '<div class="row"><span class="src">' + esc(m.name) + ' · ' + m.time + '</span>' + (m.tag === 'Срочно' ? '<span class="src b">Срочно</span>' : '') + '</div>';
+      var head = '<div class="row"><span class="src">' + esc(m.name) + ' · ' + m.time + '</span>' + (m.tag === 'Срочно' ? '<span class="src b">Срочно</span>' : '') + traceTag(m, 'src') + '</div>';
       var foot = '<div class="row" style="margin-top:8px"><span class="note">' + esc(m.note) + '</span><span class="btn-d">Разбор</span></div>';
       return swipeWrap(m.id, '<button class="pp" data-go="#/card/' + m.id + '" aria-label="Разбор: ' + esc(m.name) + '">' + head + '<div class="txt">' + segs(m.segs) + '</div>' + foot + '</button>');
     }).join('');
@@ -232,7 +238,7 @@
   function radar() {
     var rows = D.messages.map(function (m) {
       var quiet = m.level === 'quiet';
-      var inner = '<div class="av">' + esc(m.ini) + '</div><div style="flex:1;min-width:0"><div class="hd"><span class="nm">' + esc(m.name) + '</span><span class="m">' + m.time + '</span></div><div class="tx">' + segs(m.segs) + '</div></div>';
+      var inner = '<div class="av">' + esc(m.ini) + '</div><div style="flex:1;min-width:0"><div class="hd"><span class="nm">' + esc(m.name) + '</span><span class="m">' + m.time + '</span></div><div class="tx">' + segs(m.segs) + '</div>' + traceTag(m, 'tr') + '</div>';
       var canOpen = !quiet || (m.replies && m.replies.length);
       if (!canOpen) return '<div class="chat q">' + inner + '</div>';
       return swipeWrap(m.id, '<button class="chat' + (quiet ? ' q soft' : '') + '" data-go="#/card/' + m.id + '">' + inner + '</button>');
@@ -255,6 +261,7 @@
     var vi = (state.replyIdx[m.id] || 0) % Math.max(1, variants.length), rp = variants[vi] || { tone: 'Тепло', text: '' };
     var arrows = '<svg class="arrows" viewBox="0 0 346 52" width="100%" height="52" aria-hidden="true"><g fill="none" stroke="#8FA5FF" stroke-width="1.6" stroke-linecap="round"><path d="M126 2C122 22 90 28 52 46"/><path d="M42 36L52 46L38 48"/><path d="M262 2C262 24 268 32 290 46"/><path d="M280 48L290 46L286 34"/></g></svg>';
     var noteList = [];
+    (m.history || []).forEach(function (h) { noteList.push('<div class="pp"><span class="src b">Было · ' + esc(h.time) + '</span><div class="txt" style="margin-top:3px;font-size:15px">' + esc(h.text) + '</div></div>'); });
     if (m.ask) noteList.push('<div class="pp"><span class="src">Что просят</span><div class="txt" style="margin-top:3px;font-size:15px">' + esc(m.ask) + '</div></div>');
     if (m.deadline && m.deadline !== 'Без срока') noteList.push('<div class="pp"><span class="src">Срок</span><div class="txt" style="margin-top:3px;font-size:15px"><span class="hl" style="animation:none">' + esc(m.deadline) + '</span> ' + (m.left ? '<span class="note" style="margin-left:4px">' + esc(m.left) + '</span>' : '') + '</div></div>');
     if (m.memory) noteList.push('<div class="pp"><span class="src b">Помню</span><div class="txt" style="margin-top:3px;font-size:15px">' + esc(m.memory) + '</div></div>');
@@ -264,7 +271,7 @@
       '<div class="btns"><button class="btn" data-act="edit">' + (state.editing ? 'Готово' : 'Править') + '</button><button class="btn go" data-act="send" data-id="' + m.id + '">Отправить от меня</button></div>' +
       '<div class="fine">Уйдёт из твоего аккаунта только после тапа · окно ответа 24 ч</div></div>';
     return '<main class="screen" style="padding-bottom:230px"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><div class="av" style="width:34px;height:34px;font-size:11px">' + esc(m.ini) + '</div><div><b style="font-weight:600;font-size:15px">' + esc(m.name) + '</b><div class="m" style="font-size:9.5px">Разбор сообщения · ' + m.time + '</div></div></div>' +
-      '<div class="bubble">' + segs(m.fullSegs || m.segs) + '<span class="m">' + m.time + '</span></div>' + (quietCard ? '' : arrows + notes) + '</main>' + composer;
+      (m.deleted ? '<div class="m" style="margin-top:18px;color:#FF6A4D">Удалено в ' + esc(m.deletedTime) + ' · слой сохранил текст</div>' : '') + (m.edited && !m.deleted ? '<div class="m" style="margin-top:18px;color:var(--blue)">Сообщение изменили</div>' : '') + '<div class="bubble" style="margin-top:' + ((m.deleted || m.edited) ? 8 : 22) + 'px">' + segs(m.fullSegs || m.segs) + '<span class="m">' + m.time + '</span></div>' + (quietCard ? '' : arrows + notes) + '</main>' + composer;
   }
 
   function memory() {

@@ -19,6 +19,10 @@ const botId = Number(botToken.split(':')[0]);
 db.raw.prepare('DELETE FROM messages WHERE chat_id=?').run(botId);   // разовая чистка мусора от старого цикла
 const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
+// Срок хранения сообщений: 30 дней (по умолчанию), чистим при запуске и раз в сутки.
+const keepDays = Number(process.env.KEEP_DAYS || 30);
+const purge = () => { try { const n = db.purge(Date.now() - keepDays * 86400000); if (n) console.log('очищено старых сообщений:', n); } catch (e) { console.error('purge:', e.message); } };
+purge(); setInterval(purge, 24 * 3600 * 1000);
 const recap = require('./recap');
 recap.start({ db, tg, openBtn: bot.openBtn, tz: process.env.TZ_NAME || 'Europe/Moscow', botId, hour: Number(process.env.RECAP_HOUR || 21) });
 

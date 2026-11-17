@@ -264,3 +264,43 @@ test('настройки слоёв и «отложить»: радар выкл
     assert.strictEqual((await fetch(base + '/api/snooze', { method: 'POST', headers: authH(42), body: JSON.stringify({ id, hours: 999 }) })).status, 400);
   });
 });
+
+test('СЛЕД: удалённое и изменённое сообщение — уведомление с автором, временем и текстом; неизвестное и свои правки игнорируются', async () => {
+  const { db, tg, bot } = setup(new Set([1]));
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  await bot.handle(bm('u1', 7, 50, 'Подпиши акт до 18:00'));                                   // дошло до слоя
+  const n0 = tg.calls.length;
+  const edit = (over) => ({ edited_business_message: { business_connection_id: 'u1', message_id: 50, date: T0 / 1000, edit_date: T0 / 1000 + 60, chat: { id: 7, first_name: 'Чат7' }, from: { id: 7 }, text: 'Подпиши акт до 19:00', ...over } });
+  await bot.handle(edit());
+  const e = tg.calls.at(-1);
+  assert.match(e.params.text, /Изменено · Чат7/); assert.match(e.params.text, /Подпиши акт до 18:00/); assert.match(e.params.text, /Подпиши акт до 19:00/); assert.match(e.params.text, /Написано 14:12/);
+  const row = db.findMessage('u1', 7, 50);
+  assert.strictEqual(row.text, 'Подпиши акт до 19:00'); assert.strictEqual(JSON.parse(row.history)[0].text, 'Подпиши акт до 18:00'); assert.ok(row.edited_at > 0);
+  const n1 = tg.calls.length;
+  await bot.handle(edit({ text: 'Подпиши акт до 19:00' }));                                   // тот же текст — не шум
+  await bot.handle(edit({ message_id: 999, text: 'чужое неизвестное' }));                      // слой не видел
+  await bot.handle(edit({ from: { id: 1 }, text: 'моя правка' }));                             // правка владельца
+  assert.strictEqual(tg.calls.length, n1);
+  const del = { deleted_business_messages: { business_connection_id: 'u1', chat: { id: 7, first_name: 'Чат7' }, message_ids: [50, 777] } };
+  await bot.handle(del);
+  const d = tg.calls.at(-1);
+  assert.match(d.params.text, /Удалено · Чат7/); assert.match(d.params.text, /Отправлено 14:12, удалено 14:12/); assert.match(d.params.text, /Подпиши акт до 19:00/);
+  assert.strictEqual(tg.calls.length, n1 + 1);                                                  // 777 неизвестно — без уведомления
+  assert.ok(db.findMessage('u1', 7, 50).deleted_at > 0);
+  await bot.handle(del); assert.strictEqual(tg.calls.length, n1 + 1);                           // повторно не уведомляем
+});
+
+test('СЛЕД: слой выключен — всё записывается, но уведомлений нет; в ленте видны флаги; чистка по сроку', async () => {
+  await withServer(async ({ base, bot, tg, db }) => {
+    await bot.handle({ business_connection: { id: 'bc9', user: { id: 42 }, user_chat_id: 9, is_enabled: true } });
+    await fetch(base + '/api/settings', { method: 'POST', headers: authH(42), body: JSON.stringify({ layers: { trace: false } }) });
+    await bot.handle(bm('bc9', 7, 1, 'Привет, это секрет'));
+    const n = tg.calls.length;
+    await bot.handle({ deleted_business_messages: { business_connection_id: 'bc9', chat: { id: 7 }, message_ids: [1] } });
+    assert.strictEqual(tg.calls.length, n);
+    const feed = await (await fetch(base + '/api/feed', { headers: authH(42) })).json();
+    const m = feed.messages[0]; assert.strictEqual(m.deleted, true); assert.strictEqual(m.edited, false); assert.match(m.deletedTime, /\d\d:\d\d/);
+    assert.strictEqual(db.purge(T0 + 1000), 1);                                                  // всё старше точки — стирается
+    assert.strictEqual(db.feed(42, 0).length, 0);
+  });
+});

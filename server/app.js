@@ -20,7 +20,8 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     const rows = db.feed(userId, since).filter((r) => (!botId || r.chat_id !== botId) && !(r.snoozed_until > now()));
     const items = rows.map((r) => {
       const a = JSON.parse(r.analysis);
-      return { id: String(r.id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a };
+      const history = JSON.parse(r.history || '[]').map((h) => ({ text: h.text, time: fmtTime.format(h.at) }));
+      return { id: String(r.id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a, deleted: r.deleted_at > 0, deletedTime: r.deleted_at ? fmtTime.format(r.deleted_at) : '', edited: r.edited_at > 0, history };
     });
     const important = items.filter((m) => m.level !== 'quiet');
     const quiet = items.filter((m) => m.level === 'quiet');
@@ -96,7 +97,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     }
     if (req.method === 'POST' && url.pathname === '/api/settings') {
       const { layers } = await body(req);
-      const ok = ['radar', 'reply', 'memory', 'recap', 'auto'];
+      const ok = ['radar', 'reply', 'memory', 'recap', 'auto', 'trace'];
       if (!layers || typeof layers !== 'object') return json(res, 400, { error: 'bad request' });
       const clean = {}; for (const k of ok) if (typeof layers[k] === 'boolean') clean[k] = layers[k];
       const cur = db.getSettings(user.id); db.setSettings(user.id, { ...cur, layers: { ...(cur.layers || {}), ...clean } });

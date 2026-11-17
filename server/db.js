@@ -24,6 +24,9 @@ function openDb(path = ':memory:') {
   addColumn('users', 'settings', "TEXT NOT NULL DEFAULT '{}'");
   addColumn('users', 'last_recap', "TEXT NOT NULL DEFAULT ''");
   addColumn('messages', 'snoozed_until', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('messages', 'deleted_at', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('messages', 'edited_at', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('messages', 'history', "TEXT NOT NULL DEFAULT '[]'");
   const q = (sql) => db.prepare(sql);
   return {
     raw: db,
@@ -64,6 +67,13 @@ function openDb(path = ':memory:') {
     snooze(userId, id, until) { return q('UPDATE messages SET snoozed_until=? WHERE user_id=? AND id=?').run(until, userId, id).changes > 0; },
     recapUsers() { return q('SELECT DISTINCT u.id, u.last_recap FROM users u JOIN connections c ON c.user_id=u.id WHERE c.enabled=1').all(); },
     setLastRecap(userId, day) { q('UPDATE users SET last_recap=? WHERE id=?').run(day, userId); },
+    findMessage(connId, chatId, tgMsgId) { return q('SELECT * FROM messages WHERE conn_id=? AND chat_id=? AND tg_msg_id=?').get(connId, chatId, tgMsgId); },
+    markEdited(id, newText, analysis, level, history, at) {
+      q('UPDATE messages SET text=?, analysis=?, level=?, history=?, edited_at=? WHERE id=?').run(newText, JSON.stringify(analysis), level, JSON.stringify(history), at, id);
+    },
+    markDeleted(id, at) { q('UPDATE messages SET deleted_at=? WHERE id=?').run(at, id); },
+    // Срок хранения: старые сообщения стираются (по умолчанию через 30 дней).
+    purge(before) { return q('DELETE FROM messages WHERE ts < ?').run(before).changes; },
     clearUser(userId) { q('DELETE FROM messages WHERE user_id=?').run(userId); q('DELETE FROM facts WHERE user_id=?').run(userId); },
   };
 }
