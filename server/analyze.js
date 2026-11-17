@@ -5,6 +5,8 @@
 // Результат: { level: 'act'|'know'|'quiet', tag, segs, fullSegs, note, ask, deadline, left, reply }
 // segs: массив строк и пар [текст, 'hl'|'ul'] — их рисует Mini App (hl = маркер, ul = подчёркивание).
 
+const { suggest, category } = require('./replies');
+
 const DAYS = 'понедельника|вторника|среды|четверга|пятницы|субботы|воскресенья';
 const RE = {
   time: /(?<![а-яёa-z])(?:до|к|в)\s+(\d{1,2})[:.](\d{2})(?!\d)/i,
@@ -58,7 +60,8 @@ function analyze(text, { now = Date.now(), tz = 'Europe/Moscow' } = {}) {
     hit = rel; deadline = rel[3][1][0].toUpperCase() + rel[3][1].slice(1);
   }
 
-  const isAct = hasAsk || Boolean(hit) || urgent;
+  const isQuestion = /\?\s*$/.test(t) && !hasAsk && !urgent;   // «Ты придёшь завтра?» — вопрос, а не задача
+  const isAct = hasAsk || urgent || (Boolean(hit) && !isQuestion);
   if (isAct) {
     const segs = hit ? [hit[0], [hit[1], 'hl'], hit[2]].filter((s) => s !== '') : [t];
     const asked = firstSentenceWith(t, RE.ask) || t;
@@ -69,11 +72,16 @@ function analyze(text, { now = Date.now(), tz = 'Europe/Moscow' } = {}) {
       note: deadline ? (urgent || time ? 'срок — сегодня' : 'поставить напоминание?') : 'ответь, когда сможешь',
       ask: asked.replace(/[.!]+$/, '') + '.',
       deadline: deadline || 'Без срока', left,
-      reply: suggestReply(t, hit, deadline),
+      ...withReplies(t, [suggestReply(t, hit, deadline)]),
     };
   }
 
-  if (RE.smalltalk.test(t)) return quiet(t);
+  const cat = category(t);
+  if (cat) {
+    const warm = { love: 'приятное сообщение', miss: 'по тебе скучают', congrats: 'поздравляют', invite: 'зовут куда-то', where: 'ждут ответа', yesno: 'ждут ответа', when: 'ждут ответа' };
+    if (warm[cat]) return { level: 'know', tag: 'Личное', segs: [t], fullSegs: [t], note: warm[cat], ask: 'Ответить.', deadline: 'Без срока', left: '', ...withReplies(t) };
+    return { ...quiet(t), ...withReplies(t) };            // привет, спасибо, споки — тишина, но ответ подскажем
+  }
   const q = splitAround(t, RE.question);
   if (q || /\?/.test(t)) {
     const word = /(когда|где|во сколько)\s+([а-яёa-z]+)/i.exec(t);
@@ -82,10 +90,15 @@ function analyze(text, { now = Date.now(), tz = 'Europe/Moscow' } = {}) {
     return {
       level: 'know', tag: 'Личное', segs, fullSegs: segs,
       note: 'просто знай', ask: 'Ответить на вопрос.', deadline: 'Без срока', left: '',
-      reply: { tone: 'Тепло', text: 'Привет! Отвечу чуть позже, хорошо?' },
+      ...withReplies(t),
     };
   }
   return quiet(t);
+}
+
+function withReplies(t, first = []) {
+  const replies = suggest(t, { first });
+  return { replies, reply: replies[0] || null };
 }
 
 function firstSentenceWith(t, re) {
@@ -102,7 +115,7 @@ function suggestReply(t, hit, deadline) {
   return { tone: 'Тепло', text: 'Принял, скоро отвечу.' };
 }
 function quiet(t) {
-  return { level: 'quiet', tag: '', segs: [t], fullSegs: [t], note: '', ask: '', deadline: '', left: '', reply: null };
+  return { level: 'quiet', tag: '', segs: [t], fullSegs: [t], note: '', ask: '', deadline: '', left: '', reply: null, replies: [] };
 }
 
 module.exports = { analyze };

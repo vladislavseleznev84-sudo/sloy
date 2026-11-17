@@ -1,6 +1,7 @@
 'use strict';
 const { analyze } = require('./analyze');
 const { PLANS, PERIOD_MS, activePlan } = require('./plans');
+const { buildRecap } = require('./recap');
 
 const TERMS = 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.';
 const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что случилось, — ответим. [впишите контакт поддержки]';
@@ -55,7 +56,8 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       user_id: conn.user_id, conn_id: conn.id, chat_id: m.chat.id, chat_name: chatName(m.chat), tg_msg_id: m.message_id,
       text: m.text, ts: (m.date || Math.floor(now() / 1000)) * 1000, level: analysis.level, analysis,
     });
-    if (id && analysis.level === 'act' && mayNotify(conn.user_id)) {
+    const layers = (db.getSettings(conn.user_id).layers) || {};
+    if (id && analysis.level === 'act' && layers.radar !== false && mayNotify(conn.user_id)) {
       await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
         text: `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : ''),
         reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
@@ -69,6 +71,10 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML',
         text: '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\nПодключи меня: Настройки → Telegram Business → Чат-боты.',
         reply_markup: openBtn('Открыть СЛОЙ') });
+    }
+    if (/^\/recap/.test(text)) {
+      const r = buildRecap(db, m.from.id, now(), botId);
+      return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: r ? r.text : 'Пока нечего пересказывать: за сутки тихо.', reply_markup: openBtn('Открыть страницу дня') });
     }
     if (/^\/id\b/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: 'Ваш Telegram ID: ' + m.from.id });
     if (/^\/buytest/.test(text)) {
@@ -102,7 +108,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     await tg.call('sendMessage', { chat_id: m.chat.id, text: `Готово. Билет «${plan.title}» активен на 30 дней.` });
   }
 
-  return { handle };
+  return { handle, openBtn };
 }
 
 module.exports = { createBot };

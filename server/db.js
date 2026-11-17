@@ -19,6 +19,11 @@ function openDb(path = ':memory:') {
     CREATE TABLE IF NOT EXISTS facts(
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, ts INTEGER NOT NULL);
   `);
+  // Мягкая миграция: добавляем колонки в уже существующую базу.
+  const addColumn = (table, col, def) => { if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); };
+  addColumn('users', 'settings', "TEXT NOT NULL DEFAULT '{}'");
+  addColumn('users', 'last_recap', "TEXT NOT NULL DEFAULT ''");
+  addColumn('messages', 'snoozed_until', 'INTEGER NOT NULL DEFAULT 0');
   const q = (sql) => db.prepare(sql);
   return {
     raw: db,
@@ -54,6 +59,11 @@ function openDb(path = ':memory:') {
         paid: one("SELECT COUNT(*) AS n FROM users WHERE plan!='start' AND plan_until>?", now).n,
       };
     },
+    getSettings(userId) { const u = q('SELECT settings FROM users WHERE id=?').get(userId); try { return JSON.parse((u && u.settings) || '{}'); } catch { return {}; } },
+    setSettings(userId, obj) { q('UPDATE users SET settings=? WHERE id=?').run(JSON.stringify(obj), userId); },
+    snooze(userId, id, until) { return q('UPDATE messages SET snoozed_until=? WHERE user_id=? AND id=?').run(until, userId, id).changes > 0; },
+    recapUsers() { return q('SELECT DISTINCT u.id, u.last_recap FROM users u JOIN connections c ON c.user_id=u.id WHERE c.enabled=1').all(); },
+    setLastRecap(userId, day) { q('UPDATE users SET last_recap=? WHERE id=?').run(day, userId); },
     clearUser(userId) { q('DELETE FROM messages WHERE user_id=?').run(userId); q('DELETE FROM facts WHERE user_id=?').run(userId); },
   };
 }

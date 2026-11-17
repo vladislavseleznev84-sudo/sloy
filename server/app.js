@@ -17,7 +17,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
 
   function buildFeed(userId) {
     const since = now() - 24 * 3600 * 1000;
-    const rows = db.feed(userId, since).filter((r) => !botId || r.chat_id !== botId);
+    const rows = db.feed(userId, since).filter((r) => (!botId || r.chat_id !== botId) && !(r.snoozed_until > now()));
     const items = rows.map((r) => {
       const a = JSON.parse(r.analysis);
       return { id: String(r.id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a };
@@ -29,6 +29,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       now: { date: fmtDate.format(now()), time: fmtTime.format(now()), total: items.length, listening: chats, of: null },
       messages: [...important, ...quiet.slice(0, 2)],
       quietCount: Math.max(0, quiet.length - 2),
+      settings: db.getSettings(userId),
       facts: db.facts(userId).map((f) => ({ t: f.title, s: f.body })),
       connected: Boolean(db.userConnection(userId)),
     };
@@ -92,6 +93,19 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
         return json(res, 200, { ok: true, user: db.getUser(uid) });
       }
       return json(res, 404, { error: 'not found' });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/settings') {
+      const { layers } = await body(req);
+      const ok = ['radar', 'reply', 'memory', 'recap', 'auto'];
+      if (!layers || typeof layers !== 'object') return json(res, 400, { error: 'bad request' });
+      const clean = {}; for (const k of ok) if (typeof layers[k] === 'boolean') clean[k] = layers[k];
+      const cur = db.getSettings(user.id); db.setSettings(user.id, { ...cur, layers: { ...(cur.layers || {}), ...clean } });
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/snooze') {
+      const { id, hours } = await body(req); const h = Number(hours);
+      if (!(h >= 1 && h <= 72) || !db.snooze(user.id, Number(id), now() + h * 3600000)) return json(res, 400, { error: 'bad request' });
+      return json(res, 200, { ok: true });
     }
     if (req.method === 'DELETE' && url.pathname === '/api/memory') {
       db.clearUser(user.id); return json(res, 200, { ok: true });

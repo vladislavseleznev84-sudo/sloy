@@ -19,5 +19,8 @@ const botId = Number(botToken.split(':')[0]);
 db.raw.prepare('DELETE FROM messages WHERE chat_id=?').run(botId);   // разовая чистка мусора от старого цикла
 const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
+const recap = require('./recap');
+recap.start({ db, tg, openBtn: bot.openBtn, tz: process.env.TZ_NAME || 'Europe/Moscow', botId, hour: Number(process.env.RECAP_HOUR || 21) });
+
 const port = Number(process.env.PORT || 3000);
 http.createServer(handler).listen(port, () => console.log('СЛОЙ слушает порт ' + port));

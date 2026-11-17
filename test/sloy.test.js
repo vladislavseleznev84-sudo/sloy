@@ -8,6 +8,7 @@ const { openDb } = require('../server/db');
 const { createBot } = require('../server/bot');
 const { createApp } = require('../server/app');
 const { PERIOD_MS } = require('../server/plans');
+const recap = require('../server/recap');
 
 const TOKEN = '123:TEST';
 const T0 = new Date('2026-11-17T14:12:00+03:00').getTime();
@@ -209,4 +210,57 @@ test('защита от цикла: сообщения самого бота и 
   for (let i = 0; i < 12; i++) await bot.handle({ business_message: { business_connection_id: 'u1', message_id: 100 + i, date: T0 / 1000, chat: { id: 200 + i }, from: { id: 200 + i }, text: 'Срочно позвони' } });
   assert.strictEqual(db.feed(1, 0).length, 12);
   assert.strictEqual(tg.calls.length - before, 8);
+});
+
+test('умные ответы: «я тебя люблю» → «я тебя тоже», привет → привет, вопрос да/нет, срок', () => {
+  const love = analyze('Я тебя люблю', { now: T0 });
+  assert.strictEqual(love.level, 'know'); assert.strictEqual(love.replies[0].text, 'Я тебя тоже люблю'); assert.strictEqual(love.replies.length, 3);
+  assert.strictEqual(analyze('Привет', { now: T0 }).replies[0].text, 'Привет!');
+  const how = analyze('Как дела ?', { now: T0 });
+  assert.strictEqual(how.level, 'quiet'); assert.match(how.replies[0].text, /хорошо/i);
+  assert.strictEqual(analyze('Спасибо!', { now: T0 }).replies[0].text, 'Пожалуйста!');
+  assert.match(analyze('Погнали гулять?', { now: T0 }).replies[0].text, /Погнали/);
+  assert.strictEqual(analyze('Ты придёшь завтра?', { now: T0 }).replies[0].text, 'Да');
+  const act = analyze('Подпиши акт до 18:00', { now: T0 });
+  assert.match(act.replies[0].text, /17:00/); assert.ok(act.replies.length >= 2);          // ответ по сроку идёт первым
+  assert.strictEqual(analyze('Ваш бонусный баланс — 120 баллов', { now: T0 }).replies.length, 0);
+  assert.deepStrictEqual(new Set(love.replies.map((r) => r.text)).size, 3);                 // без повторов
+});
+
+test('RECAP: сводка за сутки, команда /recap, отправка в 21:00 раз в день, уважает настройку слоя', async () => {
+  const { db, tg, bot } = setup(new Set([1]));
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  await bot.handle(bm('u1', 7, 1, 'Подпиши акт до 18:00'));
+  await bot.handle(bm('u1', 8, 2, 'Ваш бонусный баланс — 120 баллов'));
+  await bot.handle({ message: { chat: { id: 11 }, from: { id: 1 }, text: '/recap' } });
+  const cmd = tg.calls.at(-1);
+  assert.match(cmd.params.text, /RECAP/); assert.match(cmd.params.text, /Подпиши акт/); assert.match(cmd.params.text, /тишина \(1\)/);
+  const base = { db, tg, openBtn: bot.openBtn, tz: 'Europe/Moscow', botId: 555 };
+  const at = (h, m = 0) => new Date(`2026-11-17T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00+03:00`).getTime();
+  const before = tg.calls.length;
+  assert.strictEqual(await recap.tick({ ...base, now: at(20, 59) }), 0);                 // не время
+  assert.strictEqual(await recap.tick({ ...base, now: at(21, 0) }), 1);                  // 21:00 — отправили
+  assert.strictEqual(await recap.tick({ ...base, now: at(21, 1) }), 0);                  // повторно в тот же день — нет
+  assert.strictEqual(tg.calls.length - before, 1);
+  db.raw.prepare('UPDATE users SET last_recap=?').run('');
+  db.setSettings(1, { layers: { recap: false } });
+  assert.strictEqual(await recap.tick({ ...base, now: at(21, 2) }), 0);                  // слой RECAP выключен
+});
+
+test('настройки слоёв и «отложить»: радар выключен — уведомлений нет; отложенное скрывается из ленты', async () => {
+  await withServer(async ({ base, bot, tg, db }) => {
+    await bot.handle({ business_connection: { id: 'bc9', user: { id: 42 }, user_chat_id: 9, is_enabled: true } });
+    const set = (layers) => fetch(base + '/api/settings', { method: 'POST', headers: authH(42), body: JSON.stringify({ layers }) });
+    assert.strictEqual((await set({ radar: false, evil: true })).status, 200);
+    assert.deepStrictEqual(db.getSettings(42), { layers: { radar: false } });             // лишние ключи отброшены
+    const n = tg.calls.length;
+    await bot.handle(bm('bc9', 7, 1, 'Подпиши акт до 18:00'));
+    assert.strictEqual(tg.calls.length, n);                                                 // радар выключен — без уведомления, но разобрано
+    const feed = await (await fetch(base + '/api/feed', { headers: authH(42) })).json();
+    assert.strictEqual(feed.messages.length, 1); assert.deepStrictEqual(feed.settings.layers, { radar: false });
+    const id = feed.messages[0].id;
+    assert.strictEqual((await fetch(base + '/api/snooze', { method: 'POST', headers: authH(42), body: JSON.stringify({ id, hours: 3 }) })).status, 200);
+    assert.strictEqual((await (await fetch(base + '/api/feed', { headers: authH(42) })).json()).messages.length, 0);
+    assert.strictEqual((await fetch(base + '/api/snooze', { method: 'POST', headers: authH(42), body: JSON.stringify({ id, hours: 999 }) })).status, 400);
+  });
 });
