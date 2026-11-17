@@ -81,7 +81,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
 
   // «След»: уведомления об изменённых и удалённых сообщениях (только те, что слой уже видел).
   const hhmm = (ts) => new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(ts);
-  const traceOn = (userId) => ((db.getSettings(userId).layers) || {}).trace !== false;
+  const traceOn = (userId) => ((db.getSettings(userId).layers) || {}).trace !== false && activePlan(db.getUser(userId), now(), adminIds.has(userId)).features.trace;
   const quote = (t) => `<blockquote>${esc(String(t).slice(0, 900))}</blockquote>`;
 
   async function onEdited(m) {

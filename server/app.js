@@ -16,14 +16,15 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const fmtDate = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' });
 
-  function buildFeed(userId) {
+  function buildFeed(userId, plan) {
     const vipSet = new Set((db.getSettings(userId).vip) || []);
     const since = now() - 24 * 3600 * 1000;
     const rows = db.feed(userId, since).filter((r) => (!botId || r.chat_id !== botId) && !(r.snoozed_until > now()));
     const items = rows.map((r) => {
       const a = JSON.parse(r.analysis);
       const history = JSON.parse(r.history || '[]').map((h) => ({ text: h.text, time: fmtTime.format(h.at) }));
-      return { id: String(r.id), chatId: r.chat_id, vip: vipSet.has(r.chat_id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a, deleted: r.deleted_at > 0, deletedTime: r.deleted_at ? fmtTime.format(r.deleted_at) : '', edited: r.edited_at > 0, history };
+      const trace = !plan || plan.features.trace;           // «След» виден только на МАКС
+      return { id: String(r.id), chatId: r.chat_id, vip: vipSet.has(r.chat_id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a, deleted: trace && r.deleted_at > 0, deletedTime: trace && r.deleted_at ? fmtTime.format(r.deleted_at) : '', edited: trace && r.edited_at > 0, history: trace ? history : [] };
     });
     const important = items.filter((m) => m.level !== 'quiet');
     const quiet = items.filter((m) => m.level === 'quiet');
@@ -60,7 +61,8 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
 
     if (req.method === 'GET' && url.pathname === '/api/feed') {
       const u = db.getUser(user.id);
-      return json(res, 200, { ...buildFeed(user.id), plan: activePlan(u, now(), isAdmin).id, planUntil: u.plan_until, isAdmin });
+      const plan = activePlan(u, now(), isAdmin);
+      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin });
     }
     if (req.method === 'POST' && url.pathname === '/api/invoice') {
       const { plan } = await body(req);
@@ -76,7 +78,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       const { id, text } = await body(req);
       const row = db.getMessage(user.id, Number(id));
       if (!row || typeof text !== 'string' || !text.trim() || text.length > 4000) return json(res, 400, { error: 'bad request' });
-      if (activePlan(db.getUser(user.id), now(), isAdmin).id === 'start') return json(res, 402, { error: 'plan' });   // ответы — на платных тарифах
+      if (!activePlan(db.getUser(user.id), now(), isAdmin).features.replies) return json(res, 402, { error: 'plan' });   // ответы — на платных тарифах
       const conn = db.getConnection(row.conn_id);
       if (!conn || !conn.enabled) return json(res, 409, { error: 'not connected' });
       try {
@@ -115,6 +117,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && url.pathname === '/api/ask') {
+      if (!activePlan(db.getUser(user.id), now(), isAdmin).features.ask) return json(res, 402, { error: 'plan' });
       const { q } = await body(req);
       if (typeof q !== 'string' || !q.trim() || q.length > 200) return json(res, 400, { error: 'bad request' });
       const rows = db.allSince(user.id, now() - 30 * 86400000).filter((r) => !botId || r.chat_id !== botId);

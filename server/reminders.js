@@ -1,6 +1,7 @@
 'use strict';
 // «Ты не ответил»: если важное сообщение ждёт ответа больше 3 часов, бот напоминает (до двух раз: через 3 и 12 часов).
 const { localParts } = require('./recap');
+const { activePlan } = require('./plans');
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const short = (t, n = 50) => { const x = String(t).replace(/\s+/g, ' ').trim(); return x.length > n ? x.slice(0, n - 1) + '…' : x; };
 
@@ -13,7 +14,7 @@ function inQuiet(settings, now, tz) {
 }
 const ago = (ms) => { const h = Math.round(ms / 3600000); return h >= 1 ? h + ' ч назад' : 'недавно'; };
 
-async function tick({ db, tg, openBtn, tz, now = Date.now(), firstAfterH = 3, secondAfterH = 9 }) {
+async function tick({ db, tg, openBtn, tz, now = Date.now(), adminIds = new Set(), firstAfterH = 3, secondAfterH = 9 }) {
   const byUser = new Map();
   for (const r of db.pendingReplies(now)) {
     const due = r.reminded_count === 0 ? now - r.ts >= firstAfterH * 3600000 : now - r.reminded_at >= secondAfterH * 3600000;
@@ -25,6 +26,7 @@ async function tick({ db, tg, openBtn, tz, now = Date.now(), firstAfterH = 3, se
   for (const [userId, rows] of byUser) {
     const st = db.getSettings(userId), layers = st.layers || {};
     if (layers.remind === false || layers.radar === false || inQuiet(st, now, tz)) continue;
+    if (!activePlan(db.getUser(userId), now, adminIds.has(userId)).features.remind) continue;   // «Ты не ответил» — с тарифа СЛОЙ
     const conn = db.userConnection(userId); if (!conn) continue;
     const top = rows.slice(0, 4);
     const lines = top.map((r) => `• ${esc(r.chat_name)} (${ago(now - r.ts)}): ${esc(short(r.text))}`);

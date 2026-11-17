@@ -235,7 +235,7 @@
         .map(function (m) { return { name: m.name, text: m.fullSegs ? m.fullSegs.map(function (s) { return typeof s === 'string' ? s : s[0]; }).join('') : m.segs.join(''), time: m.time, date: 'сегодня', out: false, deleted: !!m.deleted }; });
       setTimeout(function () { done(res); }, 350); return;
     }
-    api('POST', '/api/ask', { q: q }).then(function (r) { done(r.ok ? r.data.results : []); }).catch(function () { done([]); toast('Нет связи с сервером'); });
+    api('POST', '/api/ask', { q: q }).then(function (r) { if (r.status === 402) { state.askBusy = false; toast('Поиск — на тарифе СЛОЙ'); location.hash = '#/paywall'; return; } done(r.ok ? r.data.results : []); }).catch(function () { done([]); toast('Нет связи с сервером'); });
   }
   app.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.id === 'askQ') { state.askQ = e.target.value; runAsk(); } });
   function snoozeMsg(id, hours) {
@@ -346,9 +346,9 @@
       if (p.id === sel && p.items) {
         // ['текст', 'hl'] — вся строка маркером; ['начало ', 'конец'] — подчёркнут хвост
         var items = p.items.map(function (it) { return it[1] === 'hl' ? '<div><span class="hl" style="animation:none">' + esc(it[0]) + '</span></div>' : '<div>' + esc(it[0]) + (it[1] ? '<span class="ul">' + esc(it[1]) + '</span>' : '') + '</div>'; }).join('');
-        return '<div class="paper-t"><div class="h"><div><div class="nm">' + p.name + '</div><div style="font-size:12.5px;color:#3A3F4B;margin-top:3px">' + esc(p.sub) + '</div></div><div class="price">' + STAR(22, '#0B0D14') + p.stars + '</div></div><div class="perf"></div><div class="b">' + items + '<div class="note" style="margin-top:8px">' + esc(p.note) + '</div></div></div>';
+        return '<div class="paper-t"><div class="h"><div><div class="nm">' + p.name + '</div><div style="font-size:12.5px;color:#3A3F4B;margin-top:3px">' + esc(p.sub) + '</div></div><div class="price">' + (p.stars ? STAR(22, '#0B0D14') + '<span data-count="' + p.stars + '">0</span>' : '<span style="font-size:18px">Бесплатно</span>') + '</div></div><div class="perf"></div><div class="b">' + items + '<div class="note" style="margin-top:8px">' + esc(p.note) + '</div></div></div>';
       }
-      return '<button class="ticket" data-act="plan" data-id="' + p.id + '" aria-pressed="' + (p.id === sel) + '"><span><div class="nm">' + p.name + '</div><div class="sb">' + esc(p.sub) + '</div></span><span class="u" style="font-size:16px;color:#C9CCD3;display:flex;align-items:center;gap:4px">' + (p.stars ? STAR(15) + p.stars : '0') + '</span></button>';
+      return '<button class="ticket" data-act="plan" data-id="' + p.id + '" aria-pressed="' + (p.id === sel) + '"><span><div class="nm">' + p.name + '</div><div class="sb">' + esc(p.sub) + '</div></span><span class="u" style="font-size:16px;color:#C9CCD3;display:flex;align-items:center;gap:4px">' + (p.stars ? STAR(15) + p.stars : 'Бесплатно') + '</span></button>';
     }).join('');
     var plan = P.filter(function (p) { return p.id === sel; })[0];
     var go = plan.stars ? 'Оплатить ' + STAR(17, '#07080A') + ' ' + plan.stars : 'Остаться на Старте';

@@ -332,7 +332,7 @@ test('«Ты не ответил»: через 3 ч, потом через 9 ч,
   await bot.handle(bmIn('u1', 7, 1, 'Подпиши акт до 18:00'));
   await bot.handle(bmIn('u1', 8, 2, 'Скинь файл до пятницы'));
   await bot.handle(bmOut('u1', 8, 3, 'скинул', T0 + 1000));                                   // этот чат отвечен
-  const base = { db, tg, openBtn: bot.openBtn, tz: 'Europe/Moscow' };
+  const base = { db, tg, openBtn: bot.openBtn, tz: 'Europe/Moscow', adminIds: new Set([1]) };
   const n0 = tg.calls.length;
   assert.strictEqual(await reminders.tick({ ...base, now: T0 + 2 * HOUR }), 0);                // рано
   assert.strictEqual(await reminders.tick({ ...base, now: T0 + 3 * HOUR }), 1);                // 17:12 — напомнили про Чат7
@@ -404,7 +404,7 @@ test('API: ★ важный человек, поиск, неделя; чужие
     assert.strictEqual(feed.messages[0].vip, true); assert.strictEqual(feed.messages[0].chatId, 7);
     const found = await (await post('/api/ask', { q: 'что я обещал Чат7' })).json();
     assert.strictEqual(found.results[0].out, true); assert.match(found.results[0].text, /17:00/);
-    assert.deepStrictEqual((await (await post('/api/ask', { q: 'Чат7' }, 99)).json()).results, []);   // чужому пусто
+    assert.strictEqual((await post('/api/ask', { q: 'Чат7' }, 99)).status, 402);                      // на СТАРТЕ поиск закрыт
     assert.strictEqual((await post('/api/ask', { q: '' })).status, 400);
     const w = await (await fetch(base + '/api/week', { headers: authH(42) })).json();
     assert.strictEqual(w.received, 1); assert.strictEqual(w.sent, 1);
@@ -432,4 +432,23 @@ test('резервная копия и оповещения: копия базы
   assert.strictEqual(await alert('упал'), true); assert.strictEqual(await alert('снова'), false);
   t += 11 * 60000; assert.strictEqual(await alert('ещё'), true); assert.strictEqual(sent.length, 2);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('тарифы: СТАРТ без ответов/напоминаний/поиска/«След»; СЛОЙ — без «След»; МАКС и админ — всё', async () => {
+  const clock = { t: T0 };
+  const { db, tg, bot } = setup(new Set(), 555, clock);
+  await bot.handle({ business_connection: { id: 'c5', user: { id: 5 }, user_chat_id: 55, is_enabled: true } });
+  await bot.handle(bmIn('c5', 7, 1, 'Подпиши акт до 18:00', T0 - 4 * HOUR));
+  const base = { db, tg, openBtn: bot.openBtn, tz: 'Europe/Moscow', adminIds: new Set() };
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 }), 0);                         // СТАРТ: напоминаний нет
+  db.setPlan(5, 'sloy', T0 + 30 * 86400000);
+  assert.strictEqual(await reminders.tick({ ...base, now: T0 }), 1);                         // СЛОЙ: напоминание пришло
+  const n = tg.calls.length;
+  await bot.handle({ deleted_business_messages: { business_connection_id: 'c5', chat: { id: 7 }, message_ids: [1] } });
+  assert.strictEqual(tg.calls.length, n);                                                    // СЛОЙ: «След» не уведомляет
+  await bot.handle(bmIn('c5', 7, 2, 'Привет, второе', T0));
+  db.setPlan(5, 'max', T0 + 30 * 86400000);
+  const n2 = tg.calls.length;
+  await bot.handle({ deleted_business_messages: { business_connection_id: 'c5', chat: { id: 7 }, message_ids: [2] } });
+  assert.match(tg.calls.at(-1).params.text, /Удалено/); assert.strictEqual(tg.calls.length, n2 + 1);   // МАКС: уведомляет
 });

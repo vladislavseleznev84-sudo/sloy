@@ -34,7 +34,7 @@ setInterval(() => { try { doBackup(); } catch (e) { console.error('backup:', e.m
 process.on('uncaughtException', (e) => { console.error(e); alert('сбой: ' + e.message); });
 process.on('unhandledRejection', (e) => { console.error(e); alert('ошибка: ' + (e && e.message ? e.message : e)); });
 const recap = require('./recap');
-require('./reminders').start({ db, tg, openBtn: bot.openBtn, tz: process.env.TZ_NAME || 'Europe/Moscow' });
+require('./reminders').start({ db, tg, adminIds, openBtn: bot.openBtn, tz: process.env.TZ_NAME || 'Europe/Moscow' });
 recap.start({ db, tg, openBtn: bot.openBtn, tz: process.env.TZ_NAME || 'Europe/Moscow', botId, hour: Number(process.env.RECAP_HOUR || 21) });
 
 const port = Number(process.env.PORT || 3000);
