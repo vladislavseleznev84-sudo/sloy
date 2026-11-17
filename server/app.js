@@ -11,13 +11,13 @@ function initials(name) {
   return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : '')).toUpperCase();
 }
 
-function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), now = () => Date.now() }) {
+function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, now = () => Date.now() }) {
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const fmtDate = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' });
 
   function buildFeed(userId) {
     const since = now() - 24 * 3600 * 1000;
-    const rows = db.feed(userId, since);
+    const rows = db.feed(userId, since).filter((r) => !botId || r.chat_id !== botId);
     const items = rows.map((r) => {
       const a = JSON.parse(r.analysis);
       return { id: String(r.id), name: r.chat_name, ini: initials(r.chat_name), time: fmtTime.format(r.ts), ...a };

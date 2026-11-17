@@ -18,6 +18,21 @@
     if (!isLive()) return;
     api('GET', '/api/admin/stats').then(function (r) { if (r.ok) { state.adminStats = r.data; if (route().name === 'admin') render(); } });
   }
+  function refreshFeed() {
+    if (!isLive() || !state.loaded || document.hidden) return;
+    var name = route().name;
+    if (['home', 'radar', 'memory'].indexOf(name) < 0) return;
+    if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    api('GET', '/api/feed').then(function (r) {
+      if (!r.ok) return;
+      var sig = function (x) { return JSON.stringify([x.messages, x.quietCount, x.facts]); };
+      if (sig(r.data) === sig(D)) return;                       // ничего нового — экран не трогаем, анимации не перезапускаем
+      D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts;
+      render();
+    }).catch(function () {});
+  }
+  setInterval(refreshFeed, 20000);
+  document.addEventListener('visibilitychange', refreshFeed);
   function loadFeed() {
     if (!isLive()) return Promise.resolve();
     state.live = true; state.loaded = false; render();
@@ -71,11 +86,30 @@
   var CROSS = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#6B717D" stroke-width="3" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18"/></svg>';
   var BACK = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#C9CCD3" stroke-width="2" aria-hidden="true"><path d="M15 5L8 12L15 19"/></svg>';
 
-  function tabs(active) {
-    var items = [['home', '#/', 'Страница'], ['radar', '#/radar', 'Радар'], ['memory', '#/memory', 'Память'], ['layers', '#/layers', 'Слои']];
-    return '<nav class="tabs" aria-label="Разделы">' + items.map(function (i) {
-      return '<button data-go="' + i[1] + '"' + (i[0] === active ? ' aria-current="page"' : '') + '><span>' + i[2] + '</span></button>';
-    }).join('') + '</nav>';
+  function tabs() { return ''; }   // нижняя панель живёт отдельно: см. buildNav / updateNav
+  var NAV = [
+    ['home', '#/', 'Страница', '<path d="M5 8H25"/><path class="mid" d="M9 16H29"/><path d="M5 24H25"/>'],
+    ['radar', '#/radar', 'Радар', '<path d="M6 16A10 10 0 0 1 16 26"/><path d="M6 6A20 20 0 0 1 26 26"/><circle cx="17" cy="14" r="2.4" fill="currentColor" stroke="none"/>'],
+    ['memory', '#/memory', 'Память', '<path d="M16 5A11 11 0 1 0 27 16"/><circle class="mid" cx="16" cy="16" r="3" fill="currentColor" stroke="none"/>'],
+    ['layers', '#/layers', 'Слои', '<path d="M4 10H28"/><path d="M4 22H28"/><circle class="mid" cx="11" cy="10" r="3" fill="#12162A"/><circle cx="21" cy="22" r="3" fill="#12162A"/>'],
+  ];
+  var navEl = document.getElementById('nav');
+  function buildNav() {
+    navEl.innerHTML = '<div class="ind"><i></i></div>' + NAV.map(function (i) {
+      return '<button data-go="' + i[1] + '" data-tab="' + i[0] + '" aria-label="' + i[2] + '"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' + i[3] + '</svg><span>' + i[2] + '</span></button>';
+    }).join('');
+    navEl.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-go]'); if (!b) return;
+      haptic('light'); location.hash = b.dataset.go;
+    });
+  }
+  function updateNav() {
+    var name = route().name, tab = name === 'admin' ? 'layers' : name;
+    var idx = NAV.map(function (n) { return n[0]; }).indexOf(tab);
+    navEl.hidden = idx < 0;
+    if (idx < 0) return;
+    navEl.querySelectorAll('button').forEach(function (b) { b.getAttribute('data-tab') === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
+    navEl.querySelector('.ind').style.transform = 'translateX(' + (idx * 100) + '%)';
   }
   function topbar(pillText) {
     return '<div class="top"><div class="brand">' + SYMBOL(26) + '<b>СЛОЙ</b></div>' +
@@ -105,7 +139,7 @@
       var x = (173 + r * Math.sin(ang)).toFixed(1), y = (180 - r * Math.cos(ang)).toFixed(1);
       var act = m.level === 'act';
       blips += '<circle class="blip" style="animation-delay:' + (0.5 + i * 0.18) + 's,' + (1 + i * 0.3) + 's" cx="' + x + '" cy="' + y + '" r="' + (act ? 6 : 4) + '" fill="' + (act ? '#C4FF2E' : '#6E8BFF') + '"/>';
-      if (act) labels += '<text class="rlabel" style="animation-delay:' + (0.8 + i * 0.18) + 's" x="' + (+x + 11) + '" y="' + (+y + 3) + '">' + esc(m.name.split(/[ \u00a0]/)[0].toUpperCase()) + '</text>';
+      if (act && i < 3) labels += '<text class="rlabel" style="animation-delay:' + (0.8 + i * 0.18) + 's" x="' + (+x + 11) + '" y="' + (+y + 3) + '">' + esc(m.name.split(/[ \u00a0]/)[0].toUpperCase()) + '</text>';
     });
     return '<svg class="radar-svg" viewBox="0 0 346 190" width="100%" role="img" aria-label="Радар: ' + list.length + ' отмеченных сообщений">' +
       '<path class="ring" d="M123 180A50 50 0 0 1 223 180"/><path class="ring" d="M73 180A100 100 0 0 1 273 180"/><path class="ring" d="M23 180A150 150 0 0 1 323 180"/>' +
@@ -148,7 +182,7 @@
     return '<main class="screen">' +
       '<div class="top"><h1 class="t">RADAR</h1><div class="pill"><i class="dot"></i>Живой</div></div>' +
       '<p class="lead" style="font-size:19px;margin-top:8px">Подчёркиваю важное, остальное — тишина.</p>' +
-      radarSvg(D.messages.filter(function (m) { return m.level !== 'quiet'; })) + '<div class="legend"><span><span class="hl" style="animation:none">Действие</span></span><span><span class="ul">Просто знай</span></span><span class="m" style="margin-left:auto">Личные ' + D.now.listening + ' из ' + D.now.of + '</span></div>' +
+      radarSvg(D.messages.filter(function (m) { return m.level !== 'quiet'; }).slice(0, 8)) + '<div class="legend"><span><span class="hl" style="animation:none">Действие</span></span><span><span class="ul">Просто знай</span></span><span class="m" style="margin-left:auto">Личные ' + D.now.listening + ' из ' + D.now.of + '</span></div>' +
       '<div style="margin-top:12px">' + (rows || '<p class="lead" style="font-size:17px">Пока тишина. Слой слушает.</p>') + '</div>' +
       (D.quietCount ? '<div class="silent">…и ещё ' + D.quietCount + ' в тишине</div>' : '') +
       '<div class="pp group" style="transform:rotate(.4deg)"><div class="row"><div><span class="src b">Группы</span><div style="font-size:13.5px;line-height:1.4;margin-top:3px;font-weight:500">«Диплом» пока в тишине: слой видит группу, только если его туда добавили.</div></div><button class="btn-d" data-act="groups" style="flex:none">Как</button></div></div>' +
@@ -251,6 +285,7 @@
       default: html = notFound();
     }
     app.innerHTML = html;
+    updateNav();
     countUps();
     syncBack();
   }
@@ -311,5 +346,6 @@
     if (e.target.id === 'adminUid') state.adminUid = e.target.value;
     if (e.target.id === 'adminDays') state.adminDays = e.target.value;
   });
+  buildNav();
   render();
 })();

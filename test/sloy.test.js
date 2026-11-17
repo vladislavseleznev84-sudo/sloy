@@ -43,6 +43,8 @@ test('analyze: срок, дата, личное, тишина', () => {
   assert.strictEqual(analyze('Ты когда приедешь? Купить что-нибудь?', { now: T0 }).level, 'know');
   assert.strictEqual(analyze('Ваш бонусный баланс — 120 баллов', { now: T0 }).level, 'quiet');
   assert.strictEqual(analyze('', { now: T0 }).level, 'quiet');
+  assert.strictEqual(analyze('Как дела ?', { now: T0 }).level, 'quiet');   // болтовня — не важное
+  assert.strictEqual(analyze('Когда приедешь?', { now: T0 }).level, 'know');
 });
 
 test('Business: подключение → сообщение → разбор + уведомление; свои исходящие игнорируются', async () => {

@@ -185,3 +185,17 @@ h1.t{font-family:Unbounded;font-weight:800;font-size:30px;letter-spacing:-.03em;
 .chip{border:1px solid var(--line2);border-radius:99px;padding:9px 16px;font-size:13.5px;color:#C9CCD3;white-space:nowrap;transition:scale .15s ease}
 .chip:active{scale:.94}
 .chip.on{background:var(--paper);color:#07080A;border-color:var(--paper);font-weight:600}
+
+/* нижняя панель: плавающая, маркер ползёт между вкладками */
+#nav{left:50%;bottom:calc(var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 12px);width:min(402px,calc(100% - 28px));height:66px;padding:0;border:1px solid var(--line2);border-radius:24px;background:#12162A;box-shadow:0 14px 34px rgba(0,0,0,.45);overflow:hidden;display:flex}
+#nav[hidden]{display:none}
+#nav button{flex:1;position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;color:var(--mute);text-align:center;transition:color .25s}
+#nav button span{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;background:none!important;animation:none!important}
+#nav button svg{width:22px;height:22px;transition:transform .3s cubic-bezier(.3,1.5,.4,1)}
+#nav button[aria-current=page]{color:var(--acid)}
+#nav button[aria-current=page] svg{transform:translateY(-1px) scale(1.1)}
+#nav button[aria-current=page] .mid{animation:midShift .5s cubic-bezier(.3,1.4,.4,1) both}
+@keyframes midShift{from{transform:translateX(-3px)}to{transform:translateX(3px)}}
+#nav .ind{position:absolute;left:0;top:0;width:25%;height:100%;transition:transform .45s cubic-bezier(.3,1.25,.4,1);pointer-events:none}
+#nav .ind i{position:absolute;left:50%;top:0;margin-left:-15px;width:30px;height:3px;background:var(--acid)}
+#nav button:active svg{transform:scale(.9)}

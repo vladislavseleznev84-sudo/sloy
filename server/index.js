@@ -15,7 +15,9 @@ const db = openDb(process.env.DB_PATH || path.join(__dirname, '..', 'sloy.db'));
 const adminIds = new Set((process.env.ADMIN_IDS || '').split(',').map((x) => Number(x.trim())).filter(Boolean));
 const tg = createTelegram(botToken);
 const bot = createBot({ tg, db, webappUrl, adminIds, botId: Number(botToken.split(':')[0]), tz: process.env.TZ_NAME || 'Europe/Moscow' });
-const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
+const botId = Number(botToken.split(':')[0]);
+db.raw.prepare('DELETE FROM messages WHERE chat_id=?').run(botId);   // разовая чистка мусора от старого цикла
+const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
 const port = Number(process.env.PORT || 3000);
 http.createServer(handler).listen(port, () => console.log('СЛОЙ слушает порт ' + port));
