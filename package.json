@@ -1,0 +1,12 @@
+{
+  "name": "sloy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "СЛОЙ — Telegram Mini App + бот (Business-подключение)",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server/index.js",
+    "webhook": "node scripts/set-webhook.js",
+    "test": "node --test test/*.test.js"
+  }
+}

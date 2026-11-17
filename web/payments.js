@@ -5,7 +5,7 @@
 //             Бэкенд создаёт счёт (createInvoiceLink, currency "XTR") → Mini App открывает его через WebApp.openInvoice.
 //  - 'web'  : оплата рублями (СБП и т.д.) на отдельной странице вне Telegram. Серая зона правил Telegram, по умолчанию выключено.
 window.SLOY_CONFIG = {
-  apiBase: '',          // URL бэкенда; пусто = демо-режим
+  apiBase: '',          // '' = тот же домен, что и Mini App; демо включается само вне Telegram
   webPay: false,        // показывать ссылку «Оплатить рублями (СБП)»
   webPayUrl: '',        // страница оплаты на вашем сайте
 };
@@ -29,14 +29,14 @@ window.Pay = {
     }
 
     // Stars
-    if (!cfg.apiBase || !tg || !tg.openInvoice) {
+    if (!tg || !tg.openInvoice || !tg.initData) {
       return { status: 'demo', message: 'Демо: тут откроется оплата ⭐ ' + plan.stars };
     }
     try {
       const res = await fetch(cfg.apiBase + '/api/invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: plan.id, initData: tg.initData }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'tma ' + tg.initData },
+        body: JSON.stringify({ plan: plan.id }),
       });
       if (!res.ok) throw new Error('invoice ' + res.status);
       const { link } = await res.json();

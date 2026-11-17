@@ -3,7 +3,26 @@
   var D = window.SLOY_DATA;
   var app = document.getElementById('app');
   var toastEl = document.getElementById('toast');
-  var state = { plan: 'sloy', editing: false, layers: loadLayers() };
+  var state = { plan: 'sloy', editing: false, layers: loadLayers(), live: false, loaded: true };
+
+  /* ---------- живые данные (внутри Telegram) ---------- */
+  function isLive() { var t = tg(); return !!(t && t.initData); }
+  function api(method, path, body) {
+    return fetch(path, {
+      method: method,
+      headers: { 'Authorization': 'tma ' + tg().initData, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, data: j }; }); });
+  }
+  function loadFeed() {
+    if (!isLive()) return Promise.resolve();
+    state.live = true; state.loaded = false; render();
+    return api('GET', '/api/feed').then(function (r) {
+      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; }
+      else { toast('Не вышло загрузить ленту'); D.messages = []; D.facts = []; }
+    }).catch(function () { toast('Нет связи с сервером'); D.messages = []; D.facts = []; })
+      .then(function () { state.loaded = true; render(); });
+  }
 
   /* ---------- Telegram ---------- */
   function tg() { return window.Telegram && window.Telegram.WebApp; }
@@ -59,6 +78,8 @@
   /* ---------- screens ---------- */
   function home() {
     var important = D.messages.filter(function (m) { return m.level !== 'quiet'; });
+    if (state.live && !state.loaded) return '<main class="screen">' + topbar('') + '<p class="lead">Секунду…</p></main>' + tabs('home');
+    if (state.live && important.length === 0) return homeEmpty();
     var notes = important.map(function (m) {
       var head = '<div class="row"><span class="src">' + esc(m.name) + ' · ' + m.time + '</span>' + (m.tag === 'Срочно' ? '<span class="src b">Срочно</span>' : '') + '</div>';
       var foot = '<div class="row" style="margin-top:8px"><span class="note">' + esc(m.note) + '</span><span class="btn-d">Разбор</span></div>';
@@ -68,7 +89,16 @@
       '<div class="big"><div class="n">' + important.length + '</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800">важных</div><div class="m" style="margin-top:5px;line-height:1.5">из ' + D.now.total + ' новых<br>сегодня · ' + D.now.time + '</div></div></div>' +
       '<p class="lead">Я прошёлся по личным чатам. Вот что отметил.</p>' +
       '<div class="stack">' + notes + '</div>' +
-      '<button class="ask" data-act="ask"><i>&gt;</i>Спроси слой: что я обещал Дане?</button></main>' + tabs('home');
+      '<button class="ask" data-act="ask"><i>&gt;</i>Спроси слой: что я обещал…</button></main>' + tabs('home');
+  }
+
+  function homeEmpty() {
+    var conn = state.connected;
+    return '<main class="screen">' + topbar(conn ? 'Слушаю' : 'Не подключён') +
+      '<div class="big"><div class="n" style="color:#2A3250">0</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800;color:#9DA2AE">важных пока</div><div class="m" style="margin-top:5px;line-height:1.5">' + (conn ? 'слой начал слушать' : 'слой пока ничего не видит') + '</div></div></div>' +
+      '<p class="lead">' + (conn ? 'Первая пометка появится, как только придёт что-то важное.' : 'Подключи меня в Настройки → Telegram Business → Чат-боты.') + '</p>' +
+      '<div class="pp" style="margin-top:22px;transform:rotate(-.4deg)"><span class="src b">Важно знать</span><div class="txt" style="font-size:14.5px">Прошлую переписку слой не видит — только то, что пришло после подключения.</div></div>' +
+      '</main>' + tabs('home');
   }
 
   function radar() {
@@ -81,8 +111,8 @@
       '<div class="top"><h1 class="t">RADAR</h1><div class="pill"><i class="dot"></i>Живой</div></div>' +
       '<p class="lead" style="font-size:19px;margin-top:8px">Подчёркиваю важное, остальное — тишина.</p>' +
       '<div class="legend"><span><span class="hl" style="animation:none">Действие</span></span><span><span class="ul">Просто знай</span></span><span class="m" style="margin-left:auto">Личные ' + D.now.listening + ' из ' + D.now.of + '</span></div>' +
-      '<div style="margin-top:12px">' + rows + '</div>' +
-      '<div class="silent">…и ещё ' + D.quietCount + ' сообщение в тишине</div>' +
+      '<div style="margin-top:12px">' + (rows || '<p class="lead" style="font-size:17px">Пока тишина. Слой слушает.</p>') + '</div>' +
+      (D.quietCount ? '<div class="silent">…и ещё ' + D.quietCount + ' в тишине</div>' : '') +
       '<div class="pp group" style="transform:rotate(.4deg)"><div class="row"><div><span class="src b">Группы</span><div style="font-size:13.5px;line-height:1.4;margin-top:3px;font-weight:500">«Диплом» пока в тишине: слой видит группу, только если его туда добавили.</div></div><button class="btn-d" data-act="groups" style="flex:none">Как</button></div></div>' +
       '</main>' + tabs('radar');
   }
@@ -106,7 +136,7 @@
   function memory() {
     var facts = D.facts.map(function (f) { return '<div class="pp"><span class="src b">' + esc(f.t) + '</span><div class="txt" style="font-size:15px;margin-top:3px">' + esc(f.s) + '</div></div>'; }).join('');
     return '<main class="screen"><h1 class="t">Память</h1><p class="lead" style="font-size:19px;margin-top:8px">Что я о тебе помню. Ничего лишнего.</p>' +
-      '<div class="stack">' + facts + '</div><button class="clear" data-act="clear">Стереть память</button></main>' + tabs('memory');
+      '<div class="stack">' + (facts || '<p class="lead" style="font-size:17px">Пока ничего не запомнил.</p>') + '</div><button class="clear" data-act="clear">Стереть память</button></main>' + tabs('memory');
   }
 
   function layers() {
@@ -161,7 +191,7 @@
     syncBack();
   }
   window.addEventListener('hashchange', function () { state.editing = false; window.scrollTo(0, 0); render(); });
-  window.addEventListener('load', initTg);
+  window.addEventListener('load', function () { initTg(); loadFeed(); });
 
   /* ---------- actions ---------- */
   app.addEventListener('click', function (e) {
@@ -176,10 +206,23 @@
       if (state.editing) { var t = document.getElementById('replyText'); t && t.focus(); }
       return;
     }
-    if (act === 'send') { haptic('medium'); toast('Демо: ушло бы из твоего аккаунта'); return; }
+    if (act === 'send') {
+      haptic('medium');
+      if (!state.live) { toast('Демо: ушло бы из твоего аккаунта'); return; }
+      var rt = document.getElementById('replyText');
+      api('POST', '/api/reply', { id: el.dataset.id, text: rt ? rt.textContent : '' }).then(function (r) {
+        if (r.ok) toast('Отправлено'); else if (r.status === 409) toast('Слой отключён в Telegram Business'); else toast('Не отправилось. Окно ответа — 24 часа');
+      }).catch(function () { toast('Нет связи с сервером'); });
+      return;
+    }
     if (act === 'ask') { toast('Скоро: спросишь слой голосом или текстом'); return; }
     if (act === 'groups') { toast('Добавь бота в группу и сделай админом'); return; }
-    if (act === 'clear') { haptic('medium'); toast('Демо: память стёрта'); return; }
+    if (act === 'clear') {
+      haptic('medium');
+      if (!state.live) { toast('Демо: память стёрта'); return; }
+      api('DELETE', '/api/memory').then(function (r) { if (r.ok) { D.messages = []; D.facts = []; toast('Память стёрта'); render(); } });
+      return;
+    }
     if (act === 'pay' || act === 'payweb') {
       var plan = D.plans.filter(function (p) { return p.id === state.plan; })[0];
       if (!plan.stars) { toast('Ты на Старте'); return; }
