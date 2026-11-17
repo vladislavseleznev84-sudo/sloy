@@ -1,6 +1,6 @@
 'use strict';
 const { analyze } = require('./analyze');
-const { PLANS, PERIOD_MS } = require('./plans');
+const { PLANS, PERIOD_MS, activePlan } = require('./plans');
 
 const TERMS = 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.';
 const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что случилось, — ответим. [впишите контакт поддержки]';
@@ -8,7 +8,7 @@ const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что сл
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Чат';
 
-function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.now() }) {
+function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), now = () => Date.now() }) {
   // Без публичного адреса (проверка в режиме опроса) кнопку не рисуем — Telegram требует настоящий HTTPS.
   // Экран передаём в query (?r=card/5): Telegram перезаписывает #-часть адреса своими параметрами.
   const openBtn = (text, path = '') => (webappUrl ? { inline_keyboard: [[{ text, web_app: { url: webappUrl + (path ? '/?r=' + encodeURIComponent(path) : '') } }]] } : undefined);
@@ -37,6 +37,9 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.n
     if (!conn || !conn.enabled) return;
     if (m.from && m.from.id === conn.user_id) return;          // свои исходящие не разбираем
     if (typeof m.text !== 'string') return;                    // MVP: только текст
+    // Лимит чатов по тарифу: новый чат сверх лимита не обрабатываем (админ — без лимита).
+    const plan = activePlan(db.getUser(conn.user_id), now(), adminIds.has(conn.user_id));
+    if (!db.hasChat(conn.user_id, m.chat.id) && db.countChats(conn.user_id) >= plan.chats) return;
     const analysis = analyze(m.text, { now: now(), tz });
     const id = db.addMessage({
       user_id: conn.user_id, conn_id: conn.id, chat_id: m.chat.id, chat_name: chatName(m.chat), tg_msg_id: m.message_id,
@@ -57,6 +60,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.n
         text: '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\nПодключи меня: Настройки → Telegram Business → Чат-боты.',
         reply_markup: openBtn('Открыть СЛОЙ') });
     }
+    if (/^\/id\b/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: 'Ваш Telegram ID: ' + m.from.id });
     if (/^\/buytest/.test(text)) {
       // Проверка оплаты Stars за 1 ⭐: бот потом сам вернёт её.
       return tg.call('sendInvoice', { chat_id: m.chat.id, title: 'Тест оплаты СЛОЙ', description: 'Проверка оплаты за 1 Звезду. Звезда вернётся автоматически.',

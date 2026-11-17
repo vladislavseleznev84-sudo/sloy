@@ -17,10 +17,10 @@ function fakeTg() {
   const calls = [];
   return { calls, call: async (method, params) => { calls.push({ method, params }); return method === 'createInvoiceLink' ? 'https://t.me/$invoice' : {}; } };
 }
-function setup() {
+function setup(adminIds = new Set()) {
   const db = openDb(':memory:'); const tg = fakeTg();
-  const bot = createBot({ tg, db, webappUrl: 'https://sloy.example', now: () => T0 });
-  return { db, tg, bot };
+  const bot = createBot({ tg, db, webappUrl: 'https://sloy.example', adminIds, now: () => T0 });
+  return { db, tg, bot, adminIds };
 }
 
 test('initData: валидная подпись проходит, подделка и протухшая — нет', () => {
@@ -98,9 +98,9 @@ test('бот отвечает на /terms и /support', async () => {
   assert.match(tg.calls[0].params.text, /Stars/); assert.match(tg.calls[1].params.text, /Поддержка/);
 });
 
-async function withServer(fn) {
-  const { db, tg, bot } = setup();
-  const handler = createApp({ botToken: TOKEN, webhookSecret: 's3cret', db, tg, bot, webDir: __dirname + '/../web', now: () => T0 });
+async function withServer(fn, adminIds = new Set([42])) {
+  const { db, tg, bot } = setup(adminIds);
+  const handler = createApp({ botToken: TOKEN, webhookSecret: 's3cret', db, tg, bot, adminIds, webDir: __dirname + '/../web', now: () => T0 });
   const srv = http.createServer(handler); await new Promise((r) => srv.listen(0, r));
   const base = 'http://127.0.0.1:' + srv.address().port;
   try { await fn({ base, db, tg, bot }); } finally { srv.close(); }
@@ -115,7 +115,7 @@ test('API: без подписи 401, лента отдаёт разобранн
     await bot.handle({ business_message: { business_connection_id: 'bc1', message_id: 2, date: T0 / 1000, chat: { id: 8, first_name: 'Кафе' }, from: { id: 8 }, text: 'Ваш бонусный баланс — 120 баллов' } });
     const mine = await (await fetch(base + '/api/feed', { headers: authH(42) })).json();
     assert.strictEqual(mine.messages[0].name, 'Даня'); assert.strictEqual(mine.messages[0].level, 'act');
-    assert.strictEqual(mine.plan, 'start'); assert.strictEqual(mine.connected, true);
+    assert.strictEqual(mine.plan, 'max'); assert.strictEqual(mine.connected, true);   // 42 — админ
     assert.strictEqual(mine.now.total, 2);
     const other = await (await fetch(base + '/api/feed', { headers: authH(99) })).json();
     assert.strictEqual(other.messages.length, 0);
@@ -149,5 +149,47 @@ test('вебхук: неверный секрет → 401; статика и з�
     assert.strictEqual((await fetch(base + '/webhook', { method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 's3cret' }, body: '{}' })).status, 200);
     assert.strictEqual((await fetch(base + '/')).status, 200);
     assert.strictEqual((await fetch(base + '/..%2fpackage.json')).status, 403);
+  });
+});
+
+const bm = (conn, chatId, id, text) => ({ business_message: { business_connection_id: conn, message_id: id, date: T0 / 1000, chat: { id: chatId, first_name: 'Чат' + chatId }, from: { id: chatId }, text } });
+
+test('лимит чатов: на СТАРТЕ 3 чата, четвёртый не обрабатывается; админу лимит не мешает', async () => {
+  const { db, bot } = setup(new Set([1]));
+  await bot.handle({ business_connection: { id: 'u2', user: { id: 2 }, user_chat_id: 22, is_enabled: true } });
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  for (let c = 100; c < 105; c++) { await bot.handle(bm('u2', c, c, 'Подпиши акт до 18:00')); await bot.handle(bm('u1', c, c + 1000, 'Подпиши акт до 18:00')); }
+  assert.strictEqual(db.countChats(2), 3);        // обычный пользователь: ровно лимит тарифа СТАРТ
+  assert.strictEqual(db.countChats(1), 5);        // админ: без лимита
+  await bot.handle(bm('u2', 100, 9999, 'Скинь файл до пятницы'));   // уже известный чат продолжает работать
+  assert.strictEqual(db.feed(2, 0).length, 4);
+});
+
+test('/id отвечает вашим Telegram ID', async () => {
+  const { tg, bot } = setup();
+  await bot.handle({ message: { chat: { id: 5 }, from: { id: 7998850914 }, text: '/id' } });
+  assert.match(tg.calls[0].params.text, /7998850914/);
+});
+
+test('админка: чужим 403; админ видит статистику, выдаёт и снимает тариф; ответы — только на платном', async () => {
+  await withServer(async ({ base, bot, db }) => {
+    await bot.handle({ business_connection: { id: 'bc9', user: { id: 99 }, user_chat_id: 9, is_enabled: true } });
+    await bot.handle(bm('bc9', 7, 1, 'Подпиши акт до 18:00'));
+    assert.strictEqual((await fetch(base + '/api/admin/stats', { headers: authH(99) })).status, 403);
+    const feedAdmin = await (await fetch(base + '/api/feed', { headers: authH(42) })).json();
+    assert.strictEqual(feedAdmin.isAdmin, true); assert.strictEqual(feedAdmin.plan, 'max');
+    const stats = await (await fetch(base + '/api/admin/stats', { headers: authH(42) })).json();
+    assert.ok(stats.users >= 2 && stats.messages === 1);
+    // обычный пользователь на СТАРТЕ: отправить ответ нельзя
+    const id = (await (await fetch(base + '/api/feed', { headers: authH(99) })).json()).messages[0].id;
+    const reply = () => fetch(base + '/api/reply', { method: 'POST', headers: authH(99), body: JSON.stringify({ id, text: 'ок' }) });
+    assert.strictEqual((await reply()).status, 402);
+    const bad = await fetch(base + '/api/admin/grant', { method: 'POST', headers: authH(42), body: JSON.stringify({ userId: 'x', plan: 'sloy', days: 30 }) });
+    assert.strictEqual(bad.status, 400);
+    const ok = await fetch(base + '/api/admin/grant', { method: 'POST', headers: authH(42), body: JSON.stringify({ userId: 99, plan: 'sloy', days: 30 }) });
+    assert.strictEqual(ok.status, 200); assert.strictEqual(db.getUser(99).plan, 'sloy');
+    assert.strictEqual((await reply()).status, 200);
+    await fetch(base + '/api/admin/grant', { method: 'POST', headers: authH(42), body: JSON.stringify({ userId: 99, plan: 'start', days: 0 }) });
+    assert.strictEqual((await reply()).status, 402);
   });
 });

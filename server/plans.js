@@ -7,7 +7,9 @@ const PLANS = {
 };
 const PERIOD_MS = 30 * 24 * 3600 * 1000;
 
-function activePlan(user, now = Date.now()) {
+// Админ (ADMIN_IDS) получает максимальный тариф без оплаты.
+function activePlan(user, now = Date.now(), isAdmin = false) {
+  if (isAdmin) return PLANS.max;
   if (!user || user.plan === 'start' || user.plan_until < now) return PLANS.start;
   return PLANS[user.plan] || PLANS.start;
 }

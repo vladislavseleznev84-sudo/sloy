@@ -41,6 +41,19 @@ function openDb(path = ':memory:') {
     feed(userId, since) { return q('SELECT * FROM messages WHERE user_id=? AND ts>=? ORDER BY ts DESC LIMIT 200').all(userId, since); },
     addFact(userId, title, body, now = Date.now()) { q('INSERT INTO facts(user_id,title,body,ts) VALUES(?,?,?,?)').run(userId, title, body, now); },
     facts(userId) { return q('SELECT title, body FROM facts WHERE user_id=? ORDER BY ts DESC LIMIT 50').all(userId); },
+    hasChat(userId, chatId) { return !!q('SELECT 1 FROM messages WHERE user_id=? AND chat_id=? LIMIT 1').get(userId, chatId); },
+    countChats(userId) { return q('SELECT COUNT(DISTINCT chat_id) AS n FROM messages WHERE user_id=?').get(userId).n; },
+    stats(now = Date.now()) {
+      const one = (sql, ...a) => q(sql).get(...a);
+      return {
+        users: one('SELECT COUNT(*) AS n FROM users').n,
+        connections: one('SELECT COUNT(*) AS n FROM connections WHERE enabled=1').n,
+        messages: one('SELECT COUNT(*) AS n FROM messages').n,
+        messages24h: one('SELECT COUNT(*) AS n FROM messages WHERE ts>=?', now - 86400000).n,
+        important24h: one("SELECT COUNT(*) AS n FROM messages WHERE ts>=? AND level!='quiet'", now - 86400000).n,
+        paid: one("SELECT COUNT(*) AS n FROM users WHERE plan!='start' AND plan_until>?", now).n,
+      };
+    },
     clearUser(userId) { q('DELETE FROM messages WHERE user_id=?').run(userId); q('DELETE FROM facts WHERE user_id=?').run(userId); },
   };
 }

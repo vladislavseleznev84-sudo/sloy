@@ -14,11 +14,15 @@
       body: body ? JSON.stringify(body) : undefined,
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, data: j }; }); });
   }
+  function loadAdminStats() {
+    if (!isLive()) return;
+    api('GET', '/api/admin/stats').then(function (r) { if (r.ok) { state.adminStats = r.data; if (route().name === 'admin') render(); } });
+  }
   function loadFeed() {
     if (!isLive()) return Promise.resolve();
     state.live = true; state.loaded = false; render();
     return api('GET', '/api/feed').then(function (r) {
-      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; }
+      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; }
       else { toast('Не вышло загрузить ленту'); D.messages = []; D.facts = []; }
     }).catch(function () { toast('Нет связи с сервером'); D.messages = []; D.facts = []; })
       .then(function () { state.loaded = true; render(); });
@@ -181,7 +185,8 @@
     var rights = '<div class="pp rights" style="transform:rotate(.4deg)"><div class="row"><span class="src">Права слоя в Telegram</span><span class="src b">Изменить ↗</span></div><ul>' +
       '<li>' + TICK('#2447D6') + 'Читает ' + D.now.listening + ' выбранных чатов</li><li>' + TICK('#2447D6') + 'Отвечает — только после твоего тапа</li><li class="no">' + CROSS + 'Не удаляет сообщения</li></ul></div>';
     return '<main class="screen"><h1 class="t">Слои</h1><p class="lead" style="font-size:19px;margin-top:6px">Что слой делает за тебя.</p><div style="margin-top:14px">' + rows + '</div>' + rights +
-      '<button class="clear" data-go="#/paywall">Мой билет · СЛОЙ</button></main>' + tabs('layers');
+      (state.isAdmin ? '<button class="clear" data-go="#/admin" style="border-color:#C4FF2E;color:#C4FF2E">Админ-панель</button>' : '') +
+      '<button class="clear" data-go="#/paywall">' + (state.isAdmin ? 'Тариф: админ — всё включено' : 'Мой билет · СЛОЙ') + '</button></main>' + tabs('layers');
   }
 
   function paywall() {
@@ -199,7 +204,27 @@
     var alt = window.Pay.providers().indexOf('web') > -1 && plan.stars ? '<button class="alt" data-act="payweb">Оплатить рублями (СБП)</button>' : '';
     return '<main class="screen" style="padding-bottom:210px"><div class="back"><button data-act="back" style="display:flex;align-items:center;gap:6px;color:#9DA2AE;font-size:13px">' + BACK.replace('22', '18').replace('22', '18') + 'Закрыть</button></div>' +
       '<h1 class="t" style="margin-top:16px;font-size:27px;line-height:1.1">Билет на слои</h1><p class="lead" style="font-size:19px;margin-top:6px;color:#B6BAC4">Платишь только за глубину.</p>' + list + '</main>' +
-      '<div class="cta"><button class="go" data-act="pay">' + go + '</button>' + alt + '<div class="m" style="text-align:center;margin-top:10px;font-size:9.5px;line-height:1.6">Telegram Stars · /terms · /support</div></div>';
+      (state.isAdmin ? '<div class="cta"><div class="go" style="background:#1A2036;color:#C4FF2E">Админ: всё включено без оплаты</div></div><div style="display:none">' : '<div class="cta"><button class="go" data-act="pay">' + go + '</button>' + alt) + '<div class="m" style="text-align:center;margin-top:10px;font-size:9.5px;line-height:1.6">Telegram Stars · /terms · /support</div></div>' + (state.isAdmin ? '</div>' : '');
+  }
+
+  function admin() {
+    if (!state.isAdmin) return notFound();
+    var st = state.adminStats;
+    var cells = st ? [['Пользователей', st.users], ['Подключено', st.connections], ['Сообщений всего', st.messages], ['За 24 часа', st.messages24h], ['Важных за 24 часа', st.important24h], ['Платных', st.paid]]
+      .map(function (c) { return '<div class="pp" style="padding:12px 14px"><span class="src">' + c[0] + '</span><div class="u" style="font-size:26px;font-weight:800;margin-top:4px">' + c[1] + '</div></div>'; }).join('')
+      : '<div class="sk" style="grid-column:1/3"><i></i><i></i><i></i></div>';
+    var plans = [['sloy', 'СЛОЙ'], ['max', 'МАКС'], ['start', 'Снять тариф']].map(function (p) {
+      return '<button class="chip' + (state.adminPlan === p[0] ? ' on' : '') + '" data-act="adminplan" data-id="' + p[0] + '">' + p[1] + '</button>';
+    }).join('');
+    return '<main class="screen"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><h1 class="t" style="margin:0">Админ</h1></div>' +
+      '<p class="lead" style="font-size:18px;margin-top:8px">Всё включено для тебя без оплаты.</p>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px">' + cells + '</div>' +
+      '<div class="m" style="margin:24px 0 8px">Выдать билет</div>' +
+      '<input class="fld" id="adminUid" inputmode="numeric" placeholder="Telegram ID человека" value="' + esc(state.adminUid || '') + '">' +
+      '<input class="fld" id="adminDays" inputmode="numeric" placeholder="Дней (например 30)" value="' + esc(state.adminDays || '30') + '">' +
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' + plans + '</div>' +
+      '<button class="btn go" data-act="admingrant" style="margin-top:14px;width:100%;height:48px;border-radius:99px">Выдать</button>' +
+      '<div class="fine">Узнать ID человека: пусть напишет боту команду /id</div></main>' + tabs('layers');
   }
 
   function notFound() { return '<main class="screen"><h1 class="t">Тишина</h1><p class="lead">Такого экрана нет.</p><button class="clear" data-go="#/">На главную</button></main>'; }
@@ -222,6 +247,7 @@
       case 'memory': html = memory(); break;
       case 'layers': html = layers(); break;
       case 'paywall': html = paywall(); break;
+      case 'admin': html = admin(); if (state.isAdmin && !state.adminStats) loadAdminStats(); break;
       default: html = notFound();
     }
     app.innerHTML = html;
@@ -238,6 +264,15 @@
     var act = el.dataset.act;
     if (act === 'back') { history.length > 1 ? history.back() : (location.hash = '#/'); return; }
     if (act === 'toggle') { state.layers[el.dataset.id] = !state.layers[el.dataset.id]; saveLayers(); haptic(); render(); return; }
+    if (act === 'adminplan') { state.adminPlan = el.dataset.id; haptic(); render(); return; }
+    if (act === 'admingrant') {
+      var uid = (document.getElementById('adminUid') || {}).value, days = (document.getElementById('adminDays') || {}).value;
+      state.adminUid = uid; state.adminDays = days;
+      api('POST', '/api/admin/grant', { userId: uid, plan: state.adminPlan || 'sloy', days: days }).then(function (r) {
+        if (r.ok) { haptic('medium'); toast('Выдано'); loadAdminStats(); } else toast('Не вышло: проверь ID и дни');
+      }).catch(function () { toast('Нет связи с сервером'); });
+      return;
+    }
     if (act === 'plan') { state.plan = el.dataset.id; haptic(); render(); return; }
     if (act === 'edit') {
       state.editing = !state.editing; render();
@@ -249,7 +284,7 @@
       if (!state.live) { toast('Демо: ушло бы из твоего аккаунта'); return; }
       var rt = document.getElementById('replyText');
       api('POST', '/api/reply', { id: el.dataset.id, text: rt ? rt.textContent : '' }).then(function (r) {
-        if (r.ok) toast('Отправлено'); else if (r.status === 409) toast('Слой отключён в Telegram Business'); else toast('Не отправилось. Окно ответа — 24 часа');
+        if (r.ok) toast('Отправлено'); else if (r.status === 402) { toast('Ответы — на тарифе СЛОЙ'); location.hash = '#/paywall'; } else if (r.status === 409) toast('Слой отключён в Telegram Business'); else toast('Не отправилось. Окно ответа — 24 часа');
       }).catch(function () { toast('Нет связи с сервером'); });
       return;
     }
@@ -272,5 +307,9 @@
     }
   });
 
+  app.addEventListener('input', function (e) {
+    if (e.target.id === 'adminUid') state.adminUid = e.target.value;
+    if (e.target.id === 'adminDays') state.adminDays = e.target.value;
+  });
   render();
 })();

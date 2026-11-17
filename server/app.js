@@ -11,7 +11,7 @@ function initials(name) {
   return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : '')).toUpperCase();
 }
 
-function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', now = () => Date.now() }) {
+function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), now = () => Date.now() }) {
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const fmtDate = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' });
 
@@ -52,10 +52,11 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     const user = auth(req);
     if (!user) return json(res, 401, { error: 'unauthorized' });
     db.upsertUser(user.id, now());
+    const isAdmin = adminIds.has(user.id);
 
     if (req.method === 'GET' && url.pathname === '/api/feed') {
       const u = db.getUser(user.id);
-      return json(res, 200, { ...buildFeed(user.id), plan: activePlan(u, now()).id, planUntil: u.plan_until });
+      return json(res, 200, { ...buildFeed(user.id), plan: activePlan(u, now(), isAdmin).id, planUntil: u.plan_until, isAdmin });
     }
     if (req.method === 'POST' && url.pathname === '/api/invoice') {
       const { plan } = await body(req);
@@ -71,12 +72,26 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       const { id, text } = await body(req);
       const row = db.getMessage(user.id, Number(id));
       if (!row || typeof text !== 'string' || !text.trim() || text.length > 4000) return json(res, 400, { error: 'bad request' });
+      if (activePlan(db.getUser(user.id), now(), isAdmin).id === 'start') return json(res, 402, { error: 'plan' });   // ответы — на платных тарифах
       const conn = db.getConnection(row.conn_id);
       if (!conn || !conn.enabled) return json(res, 409, { error: 'not connected' });
       try {
         await tg.call('sendMessage', { business_connection_id: conn.id, chat_id: row.chat_id, text: text.trim() });
       } catch (e) { return json(res, 502, { error: 'telegram', detail: e.message }); }
       return json(res, 200, { ok: true });
+    }
+    if (url.pathname.startsWith('/api/admin/')) {
+      if (!isAdmin) return json(res, 403, { error: 'forbidden' });
+      if (req.method === 'GET' && url.pathname === '/api/admin/stats') return json(res, 200, db.stats(now()));
+      if (req.method === 'POST' && url.pathname === '/api/admin/grant') {
+        const { userId, plan, days } = await body(req);
+        const uid = Number(userId), d = Number(days);
+        if (!Number.isInteger(uid) || uid <= 0 || !PLANS[plan] || !(d >= 0 && d <= 3650)) return json(res, 400, { error: 'bad request' });
+        db.upsertUser(uid, now());
+        if (plan === 'start' || d === 0) db.setPlan(uid, 'start', 0); else db.setPlan(uid, plan, now() + d * 86400000);
+        return json(res, 200, { ok: true, user: db.getUser(uid) });
+      }
+      return json(res, 404, { error: 'not found' });
     }
     if (req.method === 'DELETE' && url.pathname === '/api/memory') {
       db.clearUser(user.id); return json(res, 200, { ok: true });

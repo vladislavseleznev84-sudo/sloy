@@ -12,9 +12,10 @@ const botToken = need('BOT_TOKEN');
 const webhookSecret = need('WEBHOOK_SECRET');
 const webappUrl = need('WEBAPP_URL').replace(/\/$/, '');
 const db = openDb(process.env.DB_PATH || path.join(__dirname, '..', 'sloy.db'));
+const adminIds = new Set((process.env.ADMIN_IDS || '').split(',').map((x) => Number(x.trim())).filter(Boolean));
 const tg = createTelegram(botToken);
-const bot = createBot({ tg, db, webappUrl, tz: process.env.TZ_NAME || 'Europe/Moscow' });
-const handler = createApp({ botToken, webhookSecret, db, tg, bot, webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
+const bot = createBot({ tg, db, webappUrl, adminIds, tz: process.env.TZ_NAME || 'Europe/Moscow' });
+const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
 const port = Number(process.env.PORT || 3000);
 http.createServer(handler).listen(port, () => console.log('СЛОЙ слушает порт ' + port));
