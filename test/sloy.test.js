@@ -49,6 +49,8 @@ test('Business: подключение → сообщение → разбор +
   const { db, tg, bot } = setup();
   await bot.handle({ business_connection: { id: 'bc1', user: { id: 42 }, user_chat_id: 4242, is_enabled: true, rights: { can_reply: true } } });
   assert.strictEqual(tg.calls[0].method, 'sendMessage');
+  await bot.handle({ business_connection: { id: 'bc1', user: { id: 42 }, user_chat_id: 4242, is_enabled: true } });
+  assert.strictEqual(tg.calls.length, 1);          // повторное подключение не шлёт второе приветствие
   const msg = (over) => ({ business_message: { business_connection_id: 'bc1', message_id: 1, date: T0 / 1000, chat: { id: 7, first_name: 'Даня', last_name: 'М.' }, from: { id: 7 }, text: 'Подпиши акт до 18:00', ...over } });
   await bot.handle(msg());
   assert.strictEqual(db.feed(42, 0).length, 1);

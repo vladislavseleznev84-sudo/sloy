@@ -21,9 +21,10 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.n
 
   async function onConnection(c) {
     const rights = c.rights || {};
+    const was = db.getConnection(c.id);
     db.upsertUser(c.user.id, now());
     db.upsertConnection({ id: c.id, user_id: c.user.id, user_chat_id: c.user_chat_id, enabled: c.is_enabled, can_reply: !!(rights.can_reply || c.can_reply) });
-    if (c.is_enabled) {
+    if (c.is_enabled && !(was && was.enabled)) {   // приветствуем только при первом включении
       await tg.call('sendMessage', { chat_id: c.user_chat_id, parse_mode: 'HTML',
         text: '<b>Слой подключён.</b>\nЯ читаю только новое — прошлую переписку не вижу. Первая пометка появится, как только придёт что-то важное.',
         reply_markup: openBtn('Открыть СЛОЙ') });
