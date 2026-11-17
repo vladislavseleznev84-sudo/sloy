@@ -60,6 +60,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     const isAdmin = adminIds.has(user.id);
 
     if (req.method === 'GET' && url.pathname === '/api/feed') {
+      db.addEvent(user.id, 'open', now(), { daily: true });
       const u = db.getUser(user.id);
       const plan = activePlan(u, now(), isAdmin);
       const trial = (u.trial_state === 1 || u.trial_state === 2) && u.plan_until > now() ? { daysLeft: Math.max(1, Math.ceil((u.plan_until - now()) / 86400000)) } : null;
@@ -88,9 +89,19 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       } catch (e) { return json(res, 502, { error: 'telegram', detail: e.message }); }
       return json(res, 200, { ok: true });
     }
+    if (req.method === 'POST' && url.pathname === '/api/track') {
+      const { event } = await body(req);
+      if (!['paywall', 'guide', 'onboarding', 'support'].includes(event)) return json(res, 400, { error: 'bad request' });
+      db.addEvent(user.id, event, now());
+      return json(res, 200, { ok: true });
+    }
     if (url.pathname.startsWith('/api/admin/')) {
       if (!isAdmin) return json(res, 403, { error: 'forbidden' });
       if (req.method === 'GET' && url.pathname === '/api/admin/stats') return json(res, 200, db.stats(now()));
+      if (req.method === 'GET' && url.pathname === '/api/admin/funnel') {
+        const days = Math.max(0, Math.min(365, Number(url.searchParams.get('days')) || 0));
+        return json(res, 200, insights.funnel(db.allEvents(), { now: now(), days, exclude: adminIds }));
+      }
       if (req.method === 'POST' && url.pathname === '/api/admin/grant') {
         const { userId, plan, days } = await body(req);
         const uid = Number(userId), d = Number(days);

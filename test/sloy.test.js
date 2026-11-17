@@ -527,3 +527,53 @@ test('страницы /privacy и /terms: реквизиты из настро�
   assert.match(b2.tg.calls.at(-1).params.text, /https:\/\/sloy\.example\/privacy/);
   function createBotForTerms() { const tg = fakeTg(); return { tg, bot: createBot({ tg, db: openDb(':memory:'), webappUrl: 'https://sloy.example' }) }; }
 });
+
+test('события: открытие — раз в сутки, остальные один раз, оплаты все; воронка по когорте, возвращаемость, пробный, выручка', () => {
+  const db = openDb(':memory:'); const DAYMS = 86400000;
+  db.addEvent(1, 'open', T0, { daily: true }); db.addEvent(1, 'open', T0 + HOUR, { daily: true }); db.addEvent(1, 'open', T0 + DAYMS, { daily: true });
+  db.addEvent(1, 'start', T0); db.addEvent(1, 'start', T0 + 5);
+  db.addEvent(1, 'payment', T0 + 1, { amount: 150 }); db.addEvent(1, 'payment', T0 + 2, { amount: 150 });
+  const ev = db.allEvents();
+  assert.strictEqual(ev.filter((e) => e.kind === 'open').length, 2); assert.strictEqual(ev.filter((e) => e.kind === 'start').length, 1); assert.strictEqual(ev.filter((e) => e.kind === 'payment').length, 2);
+  // 4 человека + админ (99)
+  const now = T0 + 20 * DAYMS, d0 = T0;
+  const E = (u, kind, ts, extra = {}) => ({ user_id: u, kind, ts, day: kind === 'open' ? new Date(ts).toISOString().slice(0, 10) : '', amount: extra.amount || 0 });
+  const events = [
+    E(10, 'start', d0), E(10, 'connected', d0 + 1), E(10, 'trial', d0 + 1), E(10, 'notified', d0 + 2), E(10, 'open', d0 + 3), E(10, 'open', d0 + 8 * DAYMS), E(10, 'paywall', d0 + 8 * DAYMS), E(10, 'payment', d0 + 8 * DAYMS + 5, { amount: 150 }),
+    E(11, 'start', d0 + 10), E(11, 'connected', d0 + 11), E(11, 'trial', d0 + 11), E(11, 'notified', d0 + 12), E(11, 'open', d0 + 13),
+    E(12, 'start', d0 + 14), E(12, 'connected', d0 + 15),
+    E(13, 'start', now - DAYMS),                                                              // новый, в последние сутки
+    E(99, 'start', d0), E(99, 'connected', d0), E(99, 'payment', d0, { amount: 1000 }),       // админ — не считается
+  ];
+  const f = insights.funnel(events, { now, exclude: new Set([99]) });
+  const n = (k) => f.stages.find((x) => x.key === k).n;
+  assert.deepStrictEqual([n('joined'), n('connected'), n('notified'), n('open'), n('return'), n('paywall'), n('payment')], [4, 3, 2, 2, 1, 1, 1]);
+  assert.strictEqual(f.revenue, 150);                                                            // выручка админа не в счёт
+  assert.deepStrictEqual(f.trial, { started: 2, ended: 2, paid: 1 });
+  assert.deepStrictEqual(f.retention, { eligible: 3, returned: 1 });                            // трое подключены ≥7 дней назад, вернулся один
+  assert.strictEqual(f.active7, 0);
+  const last7 = insights.funnel(events, { now, days: 7, exclude: new Set([99]) });
+  assert.strictEqual(last7.stages[0].n, 1);                                                      // в окне 7 дней пришёл один человек
+});
+
+test('события пишутся: /start, подключение, подарок, первое уведомление, оплата; /api/track и воронка для админа', async () => {
+  const clock = { t: T0 };
+  const { db, tg, bot } = setup(new Set([1]), 555, clock);
+  await bot.handle({ message: { chat: { id: 7 }, from: { id: 7 }, text: '/start' } });
+  await bot.handle({ business_connection: { id: 'e1', user: { id: 7 }, user_chat_id: 77, is_enabled: true } });
+  await bot.handle(bmIn('e1', 8, 1, 'Подпиши акт до 18:00'));
+  await bot.handle({ message: { chat: { id: 7 }, from: { id: 7 }, successful_payment: { invoice_payload: 'plan:sloy:7', currency: 'XTR', total_amount: 150 } } });
+  const kinds = db.allEvents().filter((e) => e.user_id === 7).map((e) => e.kind).sort();
+  assert.deepStrictEqual(kinds, ['connected', 'notified', 'payment', 'start', 'trial']);
+  assert.strictEqual(db.allEvents().find((e) => e.kind === 'payment').amount, 150);
+  await withServer(async ({ base }) => {
+    const post = (path, o, id = 42) => fetch(base + path, { method: 'POST', headers: authH(id), body: JSON.stringify(o) });
+    assert.strictEqual((await post('/api/track', { event: 'paywall' }, 99)).status, 200);
+    assert.strictEqual((await post('/api/track', { event: 'payment' }, 99)).status, 400);        // подделать оплату нельзя
+    await fetch(base + '/api/feed', { headers: authH(99) });                                       // открытие приложения
+    assert.strictEqual((await fetch(base + '/api/admin/funnel', { headers: authH(99) })).status, 403);
+    const f = await (await fetch(base + '/api/admin/funnel?days=0', { headers: authH(42) })).json();   // 42 — админ
+    const st = (k) => f.stages.find((x) => x.key === k).n;
+    assert.strictEqual(st('joined'), 1); assert.strictEqual(st('open'), 1); assert.strictEqual(st('paywall'), 1);   // админ в воронку не входит, пользователь 99 — входит
+  });
+});

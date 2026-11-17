@@ -32,6 +32,11 @@ function openDb(path = ':memory:') {
   addColumn('messages', 'answered_at', 'INTEGER NOT NULL DEFAULT 0');     // когда владелец ответил в этом чате
   addColumn('messages', 'reminded_count', 'INTEGER NOT NULL DEFAULT 0');
   addColumn('messages', 'reminded_at', 'INTEGER NOT NULL DEFAULT 0');
+  // События для воронки: только тип и время, без текстов сообщений. Повторяющиеся (open) — раз в сутки, остальные — один раз.
+  db.exec(`CREATE TABLE IF NOT EXISTS events(
+    user_id INTEGER NOT NULL, kind TEXT NOT NULL, ts INTEGER NOT NULL, day TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, kind, day));
+    CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);`);
   const q = (sql) => db.prepare(sql);
   return {
     raw: db,
@@ -90,6 +95,12 @@ function openDb(path = ':memory:') {
     },
     bumpReminded(id, at) { q('UPDATE messages SET reminded_count=reminded_count+1, reminded_at=? WHERE id=?').run(at, id); },
     backupTo(path) { q('VACUUM INTO ?').run(path); },
+    addEvent(userId, kind, ts = Date.now(), { daily = false, amount = 0 } = {}) {
+      const day = kind === 'payment' ? String(ts) : daily ? new Date(ts).toISOString().slice(0, 10) : '';
+      q('INSERT OR IGNORE INTO events(user_id,kind,ts,day,amount) VALUES(?,?,?,?,?)').run(userId, kind, ts, day, amount);
+    },
+    allEvents() { return q('SELECT user_id, kind, ts, day, amount FROM events ORDER BY ts ASC LIMIT 300000').all(); },
+    purgeEvents(before) { return q('DELETE FROM events WHERE ts < ?').run(before).changes; },
     clearUser(userId) { q('DELETE FROM messages WHERE user_id=?').run(userId); q('DELETE FROM facts WHERE user_id=?').run(userId); },
   };
 }

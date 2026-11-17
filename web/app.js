@@ -18,6 +18,12 @@
     if (!isLive()) { state.week = { received: 47, important: 5, quiet: 42, sent: 12, answered: 4, avgReplyMin: 38, days: [{ total: 9, important: 1 }, { total: 14, important: 2 }, { total: 6, important: 0 }, { total: 11, important: 1 }, { total: 17, important: 3 }, { total: 12, important: 2 }, { total: 47, important: 5 }] }; return; }
     api('GET', '/api/week').then(function (r) { if (r.ok) { state.week = r.data; render(); } });
   }
+  function track(ev) { if (isLive()) api('POST', '/api/track', { event: ev }).catch(function () {}); }
+  function trackRoute() { var n = route().name; if (n === 'paywall') track('paywall'); else if (n === 'connect') track('guide'); }
+  function loadFunnel() {
+    if (!isLive()) return;
+    api('GET', '/api/admin/funnel?days=' + (state.funnelDays || 0)).then(function (r) { if (r.ok) { state.funnel = r.data; if (route().name === 'admin') render(); } });
+  }
   function loadAdminStats() {
     if (!isLive()) return;
     api('GET', '/api/admin/stats').then(function (r) { if (r.ok) { state.adminStats = r.data; if (route().name === 'admin') render(); } });
@@ -226,7 +232,7 @@
   }
   app.addEventListener('pointerup', endSwipe); app.addEventListener('pointercancel', endSwipe);
   app.addEventListener('click', function (e) { if (Date.now() < swipeBlockUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
-  function finishOnb() { state.showOnb = false; state.onbStep = 0; try { localStorage.setItem('sloy.onb', onbVer()); } catch (e) {} render(); }
+  function finishOnb() { track('onboarding'); state.showOnb = false; state.onbStep = 0; try { localStorage.setItem('sloy.onb', onbVer()); } catch (e) {} render(); }
   function runAsk() {
     var q = (state.askQ || '').trim(); if (!q) return;
     state.askBusy = true; render();
@@ -363,6 +369,27 @@
       (state.isAdmin ? '<div class="cta"><div class="go" style="background:#1A2036;color:#C4FF2E">Админ: всё включено без оплаты</div></div><div style="display:none">' : '<div class="cta"><button class="go" data-act="pay">' + go + '</button>' + alt) + '<div class="m" style="text-align:center;margin-top:10px;font-size:9.5px;line-height:1.6">Telegram Stars · /terms · /support</div></div>' + (state.isAdmin ? '</div>' : '');
   }
 
+  function funnelBlock() {
+    var periods = [[7, '7 дней'], [30, '30 дней'], [0, 'Всё время']].map(function (p) {
+      return '<button class="chip' + ((state.funnelDays || 0) === p[0] ? ' on' : '') + '" data-act="funnelperiod" data-d="' + p[0] + '">' + p[1] + '</button>';
+    }).join('');
+    var f = state.funnel, body;
+    if (!f) body = '<div class="sk"><i></i><i></i><i></i></div>';
+    else {
+      var top = Math.max(1, f.stages[0].n);
+      body = '<div class="funnel">' + f.stages.map(function (s, i) {
+        var conv = i ? Math.round(s.n / top * 100) + '%' : '';   // доля от «Пришли»
+        return '<div class="fr"><div class="fl"><span>' + esc(s.label) + '</span><b>' + s.n + (conv ? ' <em>' + conv + '</em>' : '') + '</b></div><div class="fb"><i style="width:' + Math.round(s.n / top * 100) + '%;animation-delay:' + (i * 80) + 'ms"></i></div></div>';
+      }).join('') + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">' +
+        '<div class="pp" style="padding:12px 14px"><span class="src">Активны за 7 дней</span><div class="u" style="font-size:24px;font-weight:800;margin-top:4px">' + f.active7 + '</div></div>' +
+        '<div class="pp" style="padding:12px 14px"><span class="src">Выручка, ⭐</span><div class="u" style="font-size:24px;font-weight:800;margin-top:4px">' + f.revenue + '</div></div>' +
+        '<div class="pp" style="padding:12px 14px"><span class="src">Оплатили после подарка</span><div class="u" style="font-size:24px;font-weight:800;margin-top:4px">' + f.trial.paid + ' / ' + f.trial.ended + '</div><div class="note" style="font-size:12.5px">из закончивших подарок (' + f.trial.started + ' получили)</div></div>' +
+        '<div class="pp" style="padding:12px 14px"><span class="src">Вернулись через неделю</span><div class="u" style="font-size:24px;font-weight:800;margin-top:4px">' + f.retention.returned + ' / ' + f.retention.eligible + '</div><div class="note" style="font-size:12.5px">подключены ≥ 7 дней назад</div></div>' +
+      '</div>';
+    }
+    return '<div class="m" style="margin:24px 0 8px">Воронка · % от «Пришли»</div><div class="seg" style="margin:0 0 12px">' + periods + '</div>' + body;
+  }
   function admin() {
     if (!state.isAdmin) return notFound();
     var st = state.adminStats;
@@ -375,6 +402,7 @@
     return '<main class="screen"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><h1 class="t" style="margin:0">Админ</h1></div>' +
       '<p class="lead" style="font-size:18px;margin-top:8px">Всё включено для тебя без оплаты.</p>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px">' + cells + '</div>' +
+      funnelBlock() +
       '<div class="m" style="margin:24px 0 8px">Выдать билет</div>' +
       '<input class="fld" id="adminUid" inputmode="numeric" placeholder="Telegram ID человека" value="' + esc(state.adminUid || '') + '">' +
       '<input class="fld" id="adminDays" inputmode="numeric" placeholder="Дней (например 30)" value="' + esc(state.adminDays || '30') + '">' +
@@ -484,7 +512,7 @@
       case 'ask': html = ask(); break;
       case 'connect': html = connect(); break;
       case 'week': if (!state.week) loadWeek(); html = week(); break;
-      case 'admin': html = admin(); if (state.isAdmin && !state.adminStats) loadAdminStats(); break;
+      case 'admin': html = admin(); if (state.isAdmin && !state.adminStats) loadAdminStats(); if (state.isAdmin && !state.funnel) loadFunnel(); break;
       default: html = notFound();
     }
     app.innerHTML = html;
@@ -492,8 +520,8 @@
     countUps();
     syncBack();
   }
-  window.addEventListener('hashchange', function () { state.editing = false; if (route().name === 'week') state.week = null; window.scrollTo(0, 0); render(); });
-  window.addEventListener('load', function () { initTg(); loadFeed(); });
+  window.addEventListener('hashchange', function () { trackRoute(); state.editing = false; if (route().name === 'week') state.week = null; window.scrollTo(0, 0); render(); });
+  window.addEventListener('load', function () { initTg(); loadFeed().then(trackRoute); });
 
   /* ---------- actions ---------- */
   app.addEventListener('click', function (e) {
@@ -511,6 +539,7 @@
     if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { var goConnect = !(state.live && state.connected); finishOnb(); if (goConnect) location.hash = '#/connect'; } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
     if (act === 'onbshow') { state.showOnb = true; state.onbStep = 0; haptic(); if (location.hash === '#/' || location.hash === '') render(); else location.hash = '#/'; return; }
     if (act === 'openlink') { var full = location.origin + el.dataset.url; var tt = tg(); if (tt && tt.openLink) tt.openLink(full); else window.open(full, '_blank'); return; }
+    if (act === 'support') { track('support'); }
     if (act === 'support') { var u = 'https://t.me/' + state.support; var t = tg(); if (t && t.openTelegramLink) t.openTelegramLink(u); else window.open(u, '_blank'); return; }
     if (act === 'connnext') { var cs = connectSteps(); if ((state.connStep || 0) >= cs.length - 1) { state.connStep = 0; haptic('medium'); location.hash = '#/'; } else { state.connStep = (state.connStep || 0) + 1; haptic(); render(); } return; }
     if (act === 'connprev') { state.connStep = Math.max(0, (state.connStep || 0) - 1); haptic(); render(); return; }
@@ -525,6 +554,7 @@
       if (state.live) api('POST', '/api/vip', { chatId: cid, on: on }).catch(function () {});
       return;
     }
+    if (act === 'funnelperiod') { state.funnelDays = Number(el.dataset.d); state.funnel = null; haptic(); render(); return; }
     if (act === 'adminplan') { state.adminPlan = el.dataset.id; haptic(); render(); return; }
     if (act === 'admingrant') {
       var uid = (document.getElementById('adminUid') || {}).value, days = (document.getElementById('adminDays') || {}).value;

@@ -36,6 +36,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     const rights = c.rights || {};
     const was = db.getConnection(c.id);
     db.upsertUser(c.user.id, now());
+    if (c.is_enabled) db.addEvent(c.user.id, 'connected', now());
     db.upsertConnection({ id: c.id, user_id: c.user.id, user_chat_id: c.user_chat_id, enabled: c.is_enabled, can_reply: !!(rights.can_reply || c.can_reply) });
     if (c.is_enabled && !(was && was.enabled)) {   // приветствуем только при первом включении
       // Подарок: 7 дней МАКС — один раз на человека (не админам и не тем, у кого уже есть тариф).
@@ -43,6 +44,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       let gift = '';
       if (u && u.trial_state === 0 && u.plan === 'start' && !adminIds.has(c.user.id)) {
         db.setPlan(c.user.id, 'max', now() + TRIAL_MS); db.setTrialState(c.user.id, 1);
+        db.addEvent(c.user.id, 'trial', now());
         gift = '\n\n<b>Тебе подарок:</b> 7 дней МАКС — ответы, «Ты не ответил», поиск и «След». Попробуй всё.';
       }
       await tg.call('sendMessage', { chat_id: c.user_chat_id, parse_mode: 'HTML',
@@ -84,7 +86,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     else if (analysis.level === 'act' && !inQuiet(st, now(), tz) && mayNotify(conn.user_id)) {
       body = `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : '');
     }
-    if (body) await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML', text: body, reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
+    if (body) { await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML', text: body, reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) }); db.addEvent(conn.user_id, 'notified', now()); }
   }
 
   // «След»: уведомления об изменённых и удалённых сообщениях (только те, что слой уже видел).
@@ -127,6 +129,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     if (m.successful_payment) return onPaid(m);
     const text = (m.text || '').trim();
     if (/^\/start/.test(text)) {
+      db.addEvent(m.from.id, 'start', now());
       return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: CONNECT_TEXT, reply_markup: openBtn('Показать, как подключить', 'connect') });
     }
     if (/^\/connect/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: CONNECT_TEXT, reply_markup: openBtn('Показать с картинками', 'connect') });
@@ -168,6 +171,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     const base = user.plan === planId && user.plan_until > now() ? user.plan_until : now();
     db.setPlan(m.from.id, planId, base + PERIOD_MS);
     db.setTrialState(m.from.id, 3);                    // оплатил — пробный период больше не нужен
+    db.addEvent(m.from.id, 'payment', now(), { amount: Number(p.total_amount) || 0 });
     await tg.call('sendMessage', { chat_id: m.chat.id, text: `Готово. Билет «${plan.title}» активен на 30 дней.` });
   }
 

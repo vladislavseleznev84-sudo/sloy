@@ -55,4 +55,41 @@ function weekStats(rows, { now = Date.now(), tz = 'Europe/Moscow' } = {}) {
   };
 }
 
-module.exports = { search, weekStats, tokens, dayStart };
+// Воронка по событиям. Когорта = люди, впервые появившиеся в выбранном окне (days=0 — всё время). Админы исключаются.
+function funnel(events, { now = Date.now(), days = 0, exclude = new Set() } = {}) {
+  const DAY = 86400000, users = new Map();
+  for (const e of events) {
+    if (exclude.has(e.user_id)) continue;
+    let u = users.get(e.user_id); if (!u) users.set(e.user_id, (u = { first: e.ts, kinds: new Set(), openDays: new Set(), connectedAt: 0, trialAt: 0, payAt: 0, lastOpen: 0, opens: [] }));
+    u.first = Math.min(u.first, e.ts); u.kinds.add(e.kind);
+    if (e.kind === 'open') { u.openDays.add(e.day); u.lastOpen = Math.max(u.lastOpen, e.ts); u.opens.push(e.ts); }
+    if (e.kind === 'connected' && !u.connectedAt) u.connectedAt = e.ts;
+    if (e.kind === 'trial' && !u.trialAt) u.trialAt = e.ts;
+    if (e.kind === 'payment' && !u.payAt) u.payAt = e.ts;
+  }
+  const since = days ? now - days * DAY : 0;
+  const cohort = [...users.values()].filter((u) => u.first >= since);
+  const has = (k) => cohort.filter((u) => u.kinds.has(k)).length;
+  const stages = [
+    { key: 'joined', label: 'Пришли', n: cohort.length },
+    { key: 'connected', label: 'Подключили бота', n: has('connected') },
+    { key: 'notified', label: 'Получили первое уведомление', n: has('notified') },
+    { key: 'open', label: 'Открыли приложение', n: has('open') },
+    { key: 'return', label: 'Вернулись в другой день', n: cohort.filter((u) => u.openDays.size >= 2).length },
+    { key: 'paywall', label: 'Дошли до тарифов', n: has('paywall') },
+    { key: 'payment', label: 'Оплатили', n: has('payment') },
+  ];
+  const eligible = [...users.values()].filter((u) => u.connectedAt && u.connectedAt <= now - 7 * DAY);
+  const returned = eligible.filter((u) => u.opens.some((t) => t >= u.connectedAt + 6 * DAY)).length;
+  const trial = [...users.values()].filter((u) => u.trialAt);
+  const revenue = events.filter((e) => e.kind === 'payment' && !exclude.has(e.user_id) && e.ts >= since).reduce((a, e) => a + e.amount, 0);
+  return {
+    stages,
+    active7: [...users.values()].filter((u) => u.lastOpen >= now - 7 * DAY).length,
+    revenue,
+    trial: { started: trial.length, ended: trial.filter((u) => u.trialAt + 7 * DAY < now).length, paid: trial.filter((u) => u.payAt && u.payAt >= u.trialAt).length },
+    retention: { eligible: eligible.length, returned },
+  };
+}
+
+module.exports = { search, weekStats, tokens, dayStart, funnel };

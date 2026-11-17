@@ -31,6 +31,8 @@ const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botI
 const keepDays = Number(process.env.KEEP_DAYS || 30);
 const purge = () => { try { const n = db.purge(Date.now() - keepDays * 86400000); if (n) console.log('очищено старых сообщений:', n); } catch (e) { console.error('purge:', e.message); } };
 purge(); setInterval(purge, 24 * 3600 * 1000);
+const purgeEvents = () => { try { db.purgeEvents(Date.now() - 365 * 86400000); } catch (e) { console.error('purgeEvents:', e.message); } };
+purgeEvents(); setInterval(purgeEvents, 24 * 3600 * 1000);
 // Резервная копия базы раз в сутки (последние 7 хранятся рядом с базой). Отправить копию в Telegram админу: команда /backup.
 try { doBackup(); } catch (e) { console.error('backup:', e.message); }
 setInterval(() => { try { doBackup(); } catch (e) { console.error('backup:', e.message); } }, 24 * 3600 * 1000);
