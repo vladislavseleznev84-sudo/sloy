@@ -29,6 +29,9 @@
   function initTg() {
     var t = tg(); if (!t) return;
     t.ready(); t.expand();
+    // Полный экран и защита от случайного закрытия свайпом (поддерживается новыми версиями Telegram).
+    try { if (t.requestFullscreen && !t.isFullscreen) t.requestFullscreen(); } catch (e) {}
+    try { if (t.disableVerticalSwipes) t.disableVerticalSwipes(); } catch (e) {}
     try { t.setHeaderColor('#0A0D18'); t.setBackgroundColor('#0A0D18'); } catch (e) {}
     if (t.BackButton) t.BackButton.onClick(function () { history.back(); });
     syncBack();
