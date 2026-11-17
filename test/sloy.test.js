@@ -57,7 +57,7 @@ test('Business: подключение → сообщение → разбор +
   const note = tg.calls.at(-1);
   assert.strictEqual(note.params.chat_id, 4242);
   assert.match(note.params.text, /<blockquote>Подпиши акт до 18:00<\/blockquote>/);
-  assert.match(note.params.reply_markup.inline_keyboard[0][0].web_app.url, /#\/card\/\d+$/);
+  assert.match(note.params.reply_markup.inline_keyboard[0][0].web_app.url, /\/\?r=card%2F\d+$/);
   const before = tg.calls.length;
   await bot.handle(msg({ message_id: 1 }));                     // дубль не создаёт запись и уведомление
   await bot.handle(msg({ message_id: 2, from: { id: 42 } }));   // исходящее от владельца

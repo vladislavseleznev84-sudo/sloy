@@ -10,7 +10,8 @@ const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).j
 
 function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.now() }) {
   // Без публичного адреса (проверка в режиме опроса) кнопку не рисуем — Telegram требует настоящий HTTPS.
-  const openBtn = (text, hash = '') => (webappUrl ? { inline_keyboard: [[{ text, web_app: { url: webappUrl + hash } }]] } : undefined);
+  // Экран передаём в query (?r=card/5): Telegram перезаписывает #-часть адреса своими параметрами.
+  const openBtn = (text, path = '') => (webappUrl ? { inline_keyboard: [[{ text, web_app: { url: webappUrl + (path ? '/?r=' + encodeURIComponent(path) : '') } }]] } : undefined);
 
   async function handle(update) {
     if (update.business_connection) return onConnection(update.business_connection);
@@ -44,7 +45,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.n
     if (id && analysis.level === 'act') {
       await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
         text: `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : ''),
-        reply_markup: openBtn('Открыть разбор ↗', '#/card/' + id) });
+        reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
     }
   }
 

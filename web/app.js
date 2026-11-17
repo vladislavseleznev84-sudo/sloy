@@ -172,8 +172,11 @@
 
   /* ---------- router ---------- */
   function route() {
-    var h = (location.hash || '#/').replace(/^#\/?/, '');
-    var p = h.split('/');
+    // Telegram дописывает к адресу служебные параметры (#tgWebAppData=…) — это не экран.
+    var h = (location.hash || '').replace(/^#/, '');
+    var path = /^\//.test(h) ? h.split(/[&?]/)[0] : '';
+    if (!path) { try { var q = new URLSearchParams(location.search).get('r'); if (q) path = '/' + q.replace(/^\//, ''); } catch (e) {} }
+    var p = path.replace(/^\//, '').split('/');
     return { name: p[0] || 'home', id: p[1] };
   }
   function render() {
