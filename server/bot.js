@@ -7,6 +7,7 @@ const { inQuiet } = require('./reminders');
 const TERMS = 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.';
 const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что случилось, — ответим. [впишите контакт поддержки]';
 
+const CONNECT_TEXT = '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\n<b>Что нужно:</b> Telegram Premium — подключение ботов к чатам (Telegram Business) работает только с ним.\n\n<b>Как подключить:</b>\n1. Настройки → Telegram Business\n2. Чат-боты\n3. Укажи этого бота и выбери чаты\n\nКартинками — по кнопке ниже.';
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Чат';
 
@@ -126,10 +127,9 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     if (m.successful_payment) return onPaid(m);
     const text = (m.text || '').trim();
     if (/^\/start/.test(text)) {
-      return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML',
-        text: '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\nПодключи меня: Настройки → Telegram Business → Чат-боты.',
-        reply_markup: openBtn('Открыть СЛОЙ') });
+      return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: CONNECT_TEXT, reply_markup: openBtn('Показать, как подключить', 'connect') });
     }
+    if (/^\/connect/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: CONNECT_TEXT, reply_markup: openBtn('Показать с картинками', 'connect') });
     if (/^\/backup/.test(text) && adminIds.has(m.from.id) && backup) {
       const file = backup();
       return tg.upload('sendDocument', { chat_id: m.chat.id, caption: 'Резервная копия базы СЛОЙ. Храните в надёжном месте: внутри личные сообщения.' }, 'document', file);

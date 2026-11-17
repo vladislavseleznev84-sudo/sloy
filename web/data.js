@@ -1,6 +1,7 @@
 // Демо-данные. В бою приходят с бэкенда из business_message (см. docs/ARCHITECTURE.md).
 // Сегмент: строка или [текст, 'hl' | 'ul'] — hl = маркер (действие), ul = подчёркивание (просто знай).
 window.SLOY_DATA = {
+  botUsername: 'sloyofficiall_bot',
   now: { date: '17 ноября', time: '14:12', total: 47, listening: 6, of: 11 },
   messages: [
     {

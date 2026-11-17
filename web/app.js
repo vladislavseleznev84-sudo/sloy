@@ -41,7 +41,7 @@
     if (!isLive()) return Promise.resolve();
     state.live = true; state.loaded = false; render();
     return api('GET', '/api/feed').then(function (r) {
-      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; state.trial = r.data.trial || null; var sl = (r.data.settings || {}).layers; if (sl) { for (var k in sl) if (k in state.layers) state.layers[k] = !!sl[k]; saveLayers(); } }
+      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; state.botUsername = r.data.botUsername || ''; state.trial = r.data.trial || null; var sl = (r.data.settings || {}).layers; if (sl) { for (var k in sl) if (k in state.layers) state.layers[k] = !!sl[k]; saveLayers(); } }
       else { toast('Не вышло загрузить ленту'); D.messages = []; D.facts = []; }
     }).catch(function () { toast('Нет связи с сервером'); D.messages = []; D.facts = []; })
       .then(function () { state.loaded = true; render(); });
@@ -108,7 +108,7 @@
     });
   }
   function updateNav() {
-    var name = route().name, tab = name === 'admin' ? 'layers' : name === 'ask' ? 'home' : name === 'week' ? 'memory' : name;
+    var name = route().name, tab = name === 'admin' ? 'layers' : name === 'ask' || name === 'connect' ? 'home' : name === 'week' ? 'memory' : name;
     var idx = NAV.map(function (n) { return n[0]; }).indexOf(tab);
     navEl.hidden = idx < 0 || (state.showOnb && name === 'home');
     if (idx < 0) return;
@@ -151,11 +151,13 @@
       '<line class="sweep" x1="173" y1="180" x2="173" y2="30" stroke="#C4FF2E" stroke-width="1.5" opacity=".75"/>' + blips + labels + '</svg>';
   }
 
-  function onbVer() { return '2'; }   // версия знакомства: при изменении текста — поднять, и все увидят заново
+  function onbVer() { return '3'; }   // версия знакомства: при изменении текста — поднять, и все увидят заново
   function onbDone() { try { return localStorage.getItem('sloy.onb') === onbVer(); } catch (e) { return true; } }
   var ONB = [
     ['Слой подчёркивает важное', 'Я читаю чаты, которые ты выбрал, и отмечаю то, что нельзя пропустить: сроки, просьбы, личное. Остальное — тишина.',
       '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="20" width="200" height="22" fill="currentColor" opacity=".18"/><rect x="20" y="52" width="200" height="22" fill="currentColor" opacity=".18"/><rect class="slab" x="46" y="52" width="120" height="22" fill="#C4FF2E"/><rect x="20" y="84" width="200" height="22" fill="currentColor" opacity=".1"/></svg>'],
+    ['Нужен Telegram Premium', 'Слой работает через Telegram Business — это функция Telegram Premium. Без него бот не сможет читать чаты. Дальше покажу, как подключить за минуту.',
+      '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><path d="M120 12L134 46L172 50L143 74L152 110L120 91L88 110L97 74L68 50L106 46Z" fill="#C4FF2E"/><rect x="44" y="104" width="152" height="14" rx="7" fill="currentColor" opacity=".18"/></svg>'],
     ['Свайпы и умные ответы', 'Вправо — ответить, влево — отложить на 3 часа. На «Я тебя люблю» подскажу «Я тебя тоже». Отправится только после твоего тапа.',
       '<svg viewBox="0 0 240 130" width="240" height="130" aria-hidden="true"><rect x="20" y="8" width="150" height="36" rx="12" fill="currentColor" opacity=".18"/><rect x="20" y="58" width="62" height="26" rx="13" fill="#C4FF2E"/><rect x="90" y="58" width="50" height="26" rx="13" fill="currentColor" opacity=".2"/><rect x="148" y="58" width="72" height="26" rx="13" fill="currentColor" opacity=".2"/><path d="M14 108H50M24 98L14 108L24 118" stroke="#C4FF2E" stroke-width="3" fill="none"/><path d="M226 108H190M216 98L226 108L216 118" stroke="#6E8BFF" stroke-width="3" fill="none"/></svg>'],
     ['Важные люди и тихие часы', 'Отметь человека ★ — сообщу сразу и даже ночью. С 23:00 до 08:00 все остальные уведомления молчат, но ничего не теряется.',
@@ -175,7 +177,7 @@
       '<div class="onb-art">' + s[2] + '</div><h1 class="t" style="font-size:30px;line-height:1.1;margin-top:26px">' + s[0] + '</h1>' +
       '<p class="lead" style="font-size:19px">' + s[1] + '</p>' +
       '<div class="dots">' + ONB.map(function (x, k) { return '<i' + (k === i ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
-      '<button class="btn go onb-btn" data-act="onbnext">' + (last ? 'Понятно, начнём' : 'Дальше') + '</button></main>';
+      '<button class="btn go onb-btn" data-act="onbnext">' + (last ? (state.live && state.connected ? 'Понятно, начнём' : 'Подключить слой') : 'Дальше') + '</button></main>';
   }
 
   /* ---------- тема ---------- */
@@ -277,6 +279,7 @@
     return '<main class="screen">' + topbar(conn ? 'Слушаю' : 'Не подключён') +
       '<div class="big"><div class="n" style="color:#2A3250">0</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800;color:#9DA2AE">важных пока</div><div class="m" style="margin-top:5px;line-height:1.5">' + (conn ? 'слой начал слушать' : 'слой пока ничего не видит') + '</div></div></div>' +
       '<p class="lead">' + (conn ? 'Первая пометка появится, как только придёт что-то важное.' : 'Подключи меня в Настройки → Telegram Business → Чат-боты.') + '</p>' +
+      '<button class="btn go" data-go="#/connect" style="width:100%;height:50px;border-radius:99px;margin-top:22px">Как подключить слой</button>' +
       '<div class="pp" style="margin-top:22px;transform:rotate(-.4deg)"><span class="src b">Важно знать</span><div class="txt" style="font-size:14.5px">Прошлую переписку слой не видит — только то, что пришло после подключения.</div></div>' +
       '</main>' + tabs('home');
   }
@@ -337,7 +340,7 @@
     return '<main class="screen"><h1 class="t">Слои</h1><p class="lead" style="font-size:19px;margin-top:6px">Что слой делает за тебя.</p><div style="margin-top:14px">' + rows + '</div>' + rights +
       (state.isAdmin ? '<button class="clear" data-go="#/admin" style="border-color:#C4FF2E;color:#C4FF2E">Админ-панель</button>' : '') +
       '<div class="m" style="margin:22px 0 0">Тема</div><div class="seg">' + [['auto', 'Как в Telegram'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(function (t) { return '<button class="chip' + (state.theme === t[0] ? ' on' : '') + '" data-act="theme" data-id="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
-      '<button class="clear" data-act="onbshow">Показать знакомство снова</button>' +
+      '<button class="clear" data-go="#/connect">Как подключить слой</button><button class="clear" data-act="onbshow">Показать знакомство снова</button>' +
       '<button class="clear" data-go="#/paywall">' + (state.isAdmin ? 'Тариф: админ — всё включено' : 'Мой билет · СЛОЙ') + '</button></main>' + tabs('layers');
   }
 
@@ -421,6 +424,42 @@
       '<div class="pp" style="margin-top:20px"><span class="src b">Среднее время ответа на важное</span><div class="u" style="font-size:26px;font-weight:800;margin-top:4px">' + avg + '</div><div class="note" style="margin-top:4px">ответов на важное: ' + w.answered + '</div></div></main>' + tabs('memory');
   }
 
+  /* ---------- как подключить: пошаговый гид с картинками экранов ---------- */
+  function mk(rows, hotIdx) {
+    return '<div class="mk">' + rows.map(function (r, i) {
+      return '<div class="r' + (i === hotIdx ? ' hot' : '') + '"><i class="ic">' + (r[1] || '') + '</i><span>' + r[0] + '</span>' + (r[2] ? '<em>' + r[2] + '</em>' : '') + (i === hotIdx ? '<b class="tap"></b>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function connectSteps() {
+    var bot = '@' + ((state.botUsername || D.botUsername) || 'sloyofficiall_bot');
+    return [
+      { t: 'Проверь, что есть Premium', d: 'Подключение ботов — функция Telegram Premium. В Настройках рядом с твоим именем должна быть звезда, а в списке — пункт «Telegram Business». Нет Premium — бот подключить не получится.',
+        v: mk([['Мой профиль', '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 3L14.5 9L21 9.7L16 14L17.6 20.5L12 17L6.4 20.5L8 14L3 9.7L9.5 9Z" fill="#C4FF2E"/></svg>', 'Premium'], ['Мои заметки'], ['Telegram Premium'], ['Telegram Business']], 0) },
+      { t: 'Настройки → Telegram Business', d: 'Открой Настройки (внизу справа) и нажми «Telegram Business».',
+        v: mk([['Мой профиль'], ['Энергосбережение'], ['Telegram Premium', '', '★'], ['Telegram Business', '', '›'], ['Конфиденциальность']], 3) },
+      { t: 'Выбери «Чат-боты»', d: 'В разделе Business найди «Чат-боты» — там подключаются боты к твоим чатам.',
+        v: mk([['Режим работы'], ['Местоположение'], ['Быстрые ответы'], ['Приветствие'], ['Автоответ'], ['Чат-боты', '', '›']], 5) },
+      { t: 'Укажи бота', d: 'Введи имя бота (кнопка ниже скопирует его) и выбери из списка.',
+        v: '<div class="mk"><div class="field">' + esc(bot) + '</div><div class="r hot"><i class="ic">' + SYMBOL(20) + '</i><span>СЛОЙ</span><em>бот</em><b class="tap"></b></div></div>', copy: bot },
+      { t: 'Выбери чаты и права', d: 'Отметь только те чаты, которые хочешь отдать слою (можно все личные). Права: читать сообщения и отвечать — удалять не нужно.',
+        v: mk([['Все личные чаты', '', 'вкл'], ['Исключить чаты…', '', '›'], ['Читать сообщения', '', '✓'], ['Отвечать на сообщения', '', '✓'], ['Удалять сообщения', '', '—']], 0) },
+      { t: 'Готово', d: 'Бот напишет «Слой подключён». Слой видит только новое, прошлую переписку не читает. Через несколько минут появятся первые пометки.',
+        v: '<div class="mk"><div class="bub"><b>Слой подключён.</b><br>Я читаю только новое — прошлую переписку не вижу.</div></div>' },
+    ];
+  }
+  function connect() {
+    var steps = connectSteps(), i = Math.min(state.connStep || 0, steps.length - 1), s = steps[i], last = i === steps.length - 1;
+    return '<main class="screen"><div class="back"><button data-act="back" aria-label="Назад">' + BACK + '</button><h1 class="t" style="margin:0;font-size:26px">Как подключить</h1></div>' +
+      '<div class="m" style="margin:14px 0 6px">Шаг ' + (i + 1) + ' из ' + steps.length + '</div>' +
+      '<div class="dots" style="margin:0 0 16px">' + steps.map(function (x, k) { return '<i' + (k === i ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
+      '<div class="mock-wrap">' + s.v + '</div>' +
+      '<h2 class="u" style="font-size:20px;margin:18px 0 6px">' + s.t + '</h2>' +
+      '<p class="lead" style="font-size:17px;margin:0">' + s.d + '</p>' +
+      (s.copy ? '<button class="chip on" data-act="copybot" data-v="' + esc(s.copy) + '" style="margin-top:14px">Скопировать ' + esc(s.copy) + '</button>' : '') +
+      '<div class="note d" style="margin-top:14px;font-size:13.5px">Названия пунктов могут немного отличаться в твоей версии Telegram.</div>' +
+      '<div class="btns" style="margin-top:18px;gap:10px">' + (i > 0 ? '<button class="btn" data-act="connprev">Назад</button>' : '') + '<button class="btn go" data-act="connnext">' + (last ? 'Готово' : 'Дальше') + '</button></div></main>' + tabs('home');
+  }
+
   function notFound() { return '<main class="screen"><h1 class="t">Тишина</h1><p class="lead">Такого экрана нет.</p><button class="clear" data-go="#/">На главную</button></main>'; }
 
   /* ---------- router ---------- */
@@ -442,6 +481,7 @@
       case 'layers': html = layers(); break;
       case 'paywall': html = paywall(); break;
       case 'ask': html = ask(); break;
+      case 'connect': html = connect(); break;
       case 'week': if (!state.week) loadWeek(); html = week(); break;
       case 'admin': html = admin(); if (state.isAdmin && !state.adminStats) loadAdminStats(); break;
       default: html = notFound();
@@ -467,8 +507,11 @@
     }
     if (act === 'theme') { state.theme = el.dataset.id; try { localStorage.setItem('sloy.theme', state.theme); } catch (e) {} applyTheme(); haptic(); render(); return; }
     if (act === 'nextreply') { state.replyIdx[el.dataset.id] = (state.replyIdx[el.dataset.id] || 0) + 1; state.editing = false; haptic(); render(); return; }
-    if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { finishOnb(); } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
+    if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { var goConnect = !(state.live && state.connected); finishOnb(); if (goConnect) location.hash = '#/connect'; } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
     if (act === 'onbshow') { state.showOnb = true; state.onbStep = 0; haptic(); if (location.hash === '#/' || location.hash === '') render(); else location.hash = '#/'; return; }
+    if (act === 'connnext') { var cs = connectSteps(); if ((state.connStep || 0) >= cs.length - 1) { state.connStep = 0; haptic('medium'); location.hash = '#/'; } else { state.connStep = (state.connStep || 0) + 1; haptic(); render(); } return; }
+    if (act === 'connprev') { state.connStep = Math.max(0, (state.connStep || 0) - 1); haptic(); render(); return; }
+    if (act === 'copybot') { var v = el.dataset.v; try { navigator.clipboard.writeText(v).then(function () { toast('Скопировано: ' + v); }, function () { toast(v); }); } catch (e) { toast(v); } return; }
     if (act === 'onbskip') { finishOnb(); return; }
     if (act === 'askex') { state.askQ = el.dataset.q; runAsk(); return; }
     if (act === 'askgo') { var inp = document.getElementById('askQ'); state.askQ = inp ? inp.value : state.askQ; runAsk(); return; }

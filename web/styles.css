@@ -261,3 +261,18 @@ h1.t{font-family:Unbounded;font-weight:800;font-size:30px;letter-spacing:-.03em;
 
 /* знакомство: кнопка не растягивается (перебивает .btn.go) */
 .onb .btn.go.onb-btn{flex:none;height:54px;align-self:stretch}
+
+/* гид подключения: схематичные экраны Telegram */
+.mock-wrap{margin-top:4px}
+.mk{background:var(--surf);border:1px solid var(--line2);border-radius:18px;padding:10px;animation:noteIn .5s cubic-bezier(.2,.8,.2,1) both;--r:0deg}
+.mk .r{position:relative;display:flex;align-items:center;gap:12px;padding:13px 12px;border-radius:12px;font-size:14.5px;color:var(--soft2)}
+.mk .r+.r{margin-top:2px}
+.mk .r .ic{display:flex;width:22px;height:22px;align-items:center;justify-content:center;border-radius:6px;background:var(--surf2);flex:none}
+.mk .r em{margin-left:auto;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:var(--mute);text-transform:uppercase}
+.mk .r.hot{background:rgba(196,255,46,.12);outline:2px solid var(--acid);color:var(--ink);font-weight:600;animation:ringp 1.6s ease-in-out infinite}
+[data-theme=light] .mk .r.hot{background:rgba(196,255,46,.35);outline-color:#0B0D14}
+@keyframes ringp{0%,100%{outline-offset:0}50%{outline-offset:4px}}
+.mk .tap{position:absolute;right:14px;top:50%;margin-top:-9px;width:18px;height:18px;border-radius:50%;background:var(--acid);box-shadow:0 0 0 0 rgba(196,255,46,.6);animation:tapp 1.6s ease-out infinite}
+@keyframes tapp{0%{box-shadow:0 0 0 0 rgba(196,255,46,.6)}100%{box-shadow:0 0 0 16px rgba(196,255,46,0)}}
+.mk .field{border:1px solid var(--line2);border-radius:12px;padding:13px 14px;margin-bottom:8px;font-size:15px;color:var(--ink)}
+.mk .bub{background:var(--bubble);border-radius:16px 16px 16px 4px;padding:14px 16px;font-size:15px;line-height:1.45;color:var(--ink)}

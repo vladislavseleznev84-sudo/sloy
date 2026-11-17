@@ -488,3 +488,13 @@ test('пробная неделя: МАКС новым один раз; пред
   await bot.handle({ message: { chat: { id: 99 }, from: { id: 9 }, successful_payment: { invoice_payload: 'plan:sloy:9', currency: 'XTR', total_amount: 150 } } });
   assert.strictEqual(db.getUser(9).trial_state, 3); assert.strictEqual(db.getUser(9).plan, 'sloy');
 });
+
+test('/start и /connect объясняют, что нужен Telegram Premium, и ведут на гид подключения', async () => {
+  const { tg, bot } = setup();
+  await bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/start' } });
+  await bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/connect' } });
+  for (const c of tg.calls.slice(-2)) {
+    assert.match(c.params.text, /Premium/); assert.match(c.params.text, /Telegram Business/);
+    assert.match(c.params.reply_markup.inline_keyboard[0][0].web_app.url, /\?r=connect$/);
+  }
+});

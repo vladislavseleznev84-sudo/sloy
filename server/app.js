@@ -12,7 +12,7 @@ function initials(name) {
   return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : '')).toUpperCase();
 }
 
-function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, onError = () => {}, now = () => Date.now() }) {
+function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, botUsername = '', onError = () => {}, now = () => Date.now() }) {
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const fmtDate = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' });
 
@@ -63,7 +63,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       const u = db.getUser(user.id);
       const plan = activePlan(u, now(), isAdmin);
       const trial = (u.trial_state === 1 || u.trial_state === 2) && u.plan_until > now() ? { daysLeft: Math.max(1, Math.ceil((u.plan_until - now()) / 86400000)) } : null;
-      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin, trial });
+      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin, trial, botUsername });
     }
     if (req.method === 'POST' && url.pathname === '/api/invoice') {
       const { plan } = await body(req);

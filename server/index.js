@@ -22,7 +22,9 @@ const doBackup = () => alerts.makeBackup(db, backupDir);
 const bot = createBot({ tg, db, webappUrl, adminIds, backup: doBackup, botId: Number(botToken.split(':')[0]), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 const botId = Number(botToken.split(':')[0]);
 db.raw.prepare('DELETE FROM messages WHERE chat_id=?').run(botId);   // разовая чистка мусора от старого цикла
-const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, onError: (t) => alert(t), webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
+let botUsername = '';
+tg.call('getMe').then((me) => { botUsername = me.username || ''; }).catch((e) => console.error('getMe:', e.message));
+const handler = createApp({ botToken, webhookSecret, db, tg, bot, adminIds, botId, get botUsername() { return botUsername; }, onError: (t) => alert(t), webDir: path.join(__dirname, '..', 'web'), tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
 // Срок хранения сообщений: 30 дней (по умолчанию), чистим при запуске и раз в сутки.
 const keepDays = Number(process.env.KEEP_DAYS || 30);
