@@ -17,9 +17,9 @@ function fakeTg() {
   const calls = [];
   return { calls, call: async (method, params) => { calls.push({ method, params }); return method === 'createInvoiceLink' ? 'https://t.me/$invoice' : {}; } };
 }
-function setup(adminIds = new Set()) {
+function setup(adminIds = new Set(), botId = 555) {
   const db = openDb(':memory:'); const tg = fakeTg();
-  const bot = createBot({ tg, db, webappUrl: 'https://sloy.example', adminIds, now: () => T0 });
+  const bot = createBot({ tg, db, webappUrl: 'https://sloy.example', adminIds, botId, now: () => T0 });
   return { db, tg, bot, adminIds };
 }
 
@@ -192,4 +192,19 @@ test('админка: чужим 403; админ видит статистику
     await fetch(base + '/api/admin/grant', { method: 'POST', headers: authH(42), body: JSON.stringify({ userId: 99, plan: 'start', days: 0 }) });
     assert.strictEqual((await reply()).status, 402);
   });
+});
+
+test('защита от цикла: сообщения самого бота и чат с ботом не разбираются; не больше 8 уведомлений за 10 минут', async () => {
+  const { db, tg, bot } = setup(new Set([1]), 555);
+  await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  const before = tg.calls.length;
+  // уведомление бота, которое вернулось как business_message из чата с ботом
+  await bot.handle({ business_message: { business_connection_id: 'u1', message_id: 1, date: T0 / 1000, chat: { id: 555, first_name: 'SLOY' }, from: { id: 555, is_bot: true }, text: 'RADAR · Даня\nПодпиши акт до 18:00' } });
+  await bot.handle({ business_message: { business_connection_id: 'u1', message_id: 2, date: T0 / 1000, chat: { id: 555 }, from: { id: 1 }, text: 'Подпиши акт до 18:00' } });
+  await bot.handle({ business_message: { business_connection_id: 'u1', message_id: 3, date: T0 / 1000, chat: { id: 9 }, from: { id: 9, is_bot: true }, text: 'Подпиши акт до 18:00' } });
+  assert.strictEqual(db.feed(1, 0).length, 0); assert.strictEqual(tg.calls.length, before);
+  // обычные люди: больше 8 срочных подряд не засыпают уведомлениями
+  for (let i = 0; i < 12; i++) await bot.handle({ business_message: { business_connection_id: 'u1', message_id: 100 + i, date: T0 / 1000, chat: { id: 200 + i }, from: { id: 200 + i }, text: 'Срочно позвони' } });
+  assert.strictEqual(db.feed(1, 0).length, 12);
+  assert.strictEqual(tg.calls.length - before, 8);
 });

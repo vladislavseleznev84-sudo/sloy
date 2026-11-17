@@ -10,7 +10,7 @@ const token = process.env.BOT_TOKEN;
 if (!token) { console.error('Нужна переменная BOT_TOKEN'); process.exit(1); }
 const tg = createTelegram(token);
 const db = openDb(process.env.DB_PATH || path.join(__dirname, '..', 'sloy.db'));
-const bot = createBot({ tg, db, webappUrl: process.env.WEBAPP_URL ? process.env.WEBAPP_URL.replace(/\/$/, '') : '', tz: process.env.TZ_NAME || 'Europe/Moscow' });
+const bot = createBot({ tg, db, botId: Number(token.split(':')[0]), webappUrl: process.env.WEBAPP_URL ? process.env.WEBAPP_URL.replace(/\/$/, '') : '', tz: process.env.TZ_NAME || 'Europe/Moscow' });
 
 const kinds = (u) => Object.keys(u).filter((k) => k !== 'update_id').join(',');
 (async () => {

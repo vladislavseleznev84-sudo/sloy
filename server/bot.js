@@ -8,7 +8,14 @@ const SUPPORT = 'Поддержка СЛОЯ: напиши сюда, что сл
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Чат';
 
-function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), now = () => Date.now() }) {
+function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, now = () => Date.now() }) {
+  // Предохранитель от спама: не больше 8 уведомлений за 10 минут на человека.
+  const sent = new Map();
+  const mayNotify = (userId) => {
+    const t = now(), list = (sent.get(userId) || []).filter((x) => t - x < 600000);
+    if (list.length >= 8) { sent.set(userId, list); return false; }
+    list.push(t); sent.set(userId, list); return true;
+  };
   // Без публичного адреса (проверка в режиме опроса) кнопку не рисуем — Telegram требует настоящий HTTPS.
   // Экран передаём в query (?r=card/5): Telegram перезаписывает #-часть адреса своими параметрами.
   const openBtn = (text, path = '') => (webappUrl ? { inline_keyboard: [[{ text, web_app: { url: webappUrl + (path ? '/?r=' + encodeURIComponent(path) : '') } }]] } : undefined);
@@ -36,6 +43,9 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     const conn = db.getConnection(m.business_connection_id);
     if (!conn || !conn.enabled) return;
     if (m.from && m.from.id === conn.user_id) return;          // свои исходящие не разбираем
+    // Сообщения ботов и чат с самим ботом не разбираем — иначе уведомления превращаются в бесконечный цикл.
+    if (m.from && (m.from.is_bot || (botId && m.from.id === botId))) return;
+    if (botId && m.chat && m.chat.id === botId) return;
     if (typeof m.text !== 'string') return;                    // MVP: только текст
     // Лимит чатов по тарифу: новый чат сверх лимита не обрабатываем (админ — без лимита).
     const plan = activePlan(db.getUser(conn.user_id), now(), adminIds.has(conn.user_id));
@@ -45,7 +55,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       user_id: conn.user_id, conn_id: conn.id, chat_id: m.chat.id, chat_name: chatName(m.chat), tg_msg_id: m.message_id,
       text: m.text, ts: (m.date || Math.floor(now() / 1000)) * 1000, level: analysis.level, analysis,
     });
-    if (id && analysis.level === 'act') {
+    if (id && analysis.level === 'act' && mayNotify(conn.user_id)) {
       await tg.call('sendMessage', { chat_id: conn.user_chat_id, parse_mode: 'HTML',
         text: `<b>RADAR · ${esc(chatName(m.chat))}</b>\n<blockquote>${esc(m.text)}</blockquote>` + (analysis.deadline && analysis.deadline !== 'Без срока' ? `\nСрок: ${esc(analysis.deadline)}${analysis.left ? ' · ' + esc(analysis.left) : ''}` : ''),
         reply_markup: openBtn('Открыть разбор ↗', 'card/' + id) });
