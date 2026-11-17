@@ -79,6 +79,18 @@ test('платёж: pre_checkout одобряется, successful_payment про
   assert.strictEqual(db.getUser(43), undefined);
 });
 
+test('/buytest шлёт счёт на 1 ⭐ и возвращает её после оплаты; /buy шлёт настоящий счёт', async () => {
+  const { tg, bot } = setup();
+  await bot.handle({ message: { chat: { id: 5 }, from: { id: 5 }, text: '/buytest' } });
+  const inv = tg.calls[0];
+  assert.strictEqual(inv.method, 'sendInvoice'); assert.strictEqual(inv.params.currency, 'XTR'); assert.strictEqual(inv.params.prices[0].amount, 1);
+  assert.strictEqual('provider_token' in inv.params, false);
+  await bot.handle({ message: { chat: { id: 5 }, from: { id: 5 }, successful_payment: { invoice_payload: inv.params.payload, telegram_payment_charge_id: 'ch1' } } });
+  assert.deepStrictEqual(tg.calls[1], { method: 'refundStarPayment', params: { user_id: 5, telegram_payment_charge_id: 'ch1' } });
+  await bot.handle({ message: { chat: { id: 5 }, from: { id: 5 }, text: '/buy' } });
+  assert.strictEqual(tg.calls.at(-1).params.prices[0].amount, 250);
+});
+
 test('бот отвечает на /terms и /support', async () => {
   const { tg, bot } = setup();
   await bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/terms' } });

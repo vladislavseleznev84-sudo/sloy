@@ -56,12 +56,28 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.n
         text: '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\nПодключи меня: Настройки → Telegram Business → Чат-боты.',
         reply_markup: openBtn('Открыть СЛОЙ') });
     }
+    if (/^\/buytest/.test(text)) {
+      // Проверка оплаты Stars за 1 ⭐: бот потом сам вернёт её.
+      return tg.call('sendInvoice', { chat_id: m.chat.id, title: 'Тест оплаты СЛОЙ', description: 'Проверка оплаты за 1 Звезду. Звезда вернётся автоматически.',
+        payload: 'test:' + m.from.id, currency: 'XTR', prices: [{ label: 'Тест', amount: 1 }] });
+    }
+    if (/^\/buy/.test(text)) {
+      const plan = PLANS.sloy;
+      return tg.call('sendInvoice', { chat_id: m.chat.id, title: 'Билет «' + plan.title + '»', description: 'Доступ к слоям СЛОЙ на 30 дней',
+        payload: 'plan:' + plan.id + ':' + m.from.id, currency: 'XTR', prices: [{ label: plan.title + ' · 30 дней', amount: plan.stars }] });
+    }
     if (/^\/terms/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: TERMS });
     if (/^\/support/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: SUPPORT });
   }
 
   async function onPaid(m) {
     const p = m.successful_payment;
+    if (String(p.invoice_payload || '') === 'test:' + m.from.id) {
+      let back = 'Звезда вернётся вам автоматически.';
+      try { await tg.call('refundStarPayment', { user_id: m.from.id, telegram_payment_charge_id: p.telegram_payment_charge_id }); back = 'Звезда уже возвращена вам.'; }
+      catch (e) { back = 'Не получилось вернуть Звезду автоматически (' + e.message + ') — напишите в /support.'; }
+      return tg.call('sendMessage', { chat_id: m.chat.id, text: 'Оплата прошла. ' + back });
+    }
     const [, planId, userId] = String(p.invoice_payload || '').split(':');
     const plan = PLANS[planId];
     if (!plan || Number(userId) !== m.from.id) return;   // payload сверяем с платящим
