@@ -4,7 +4,7 @@ const { PLANS, PERIOD_MS, TRIAL_MS, activePlan } = require('./plans');
 const { buildRecap } = require('./recap');
 const { inQuiet } = require('./reminders');
 
-const TERMS = 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.';
+const termsText = (base) => 'Условия СЛОЯ: подписка на 30 дней оплачивается в Telegram Stars и не продлевается сама. Слой читает только выбранные тобой чаты и только новые сообщения, отвечает от твоего имени лишь после твоего тапа. Память можно стереть в приложении. Возврат — по запросу в /support.' + (base ? '\n\nУсловия: ' + base + '/terms\nПолитика конфиденциальности: ' + base + '/privacy' : '');
 const supportText = (c) => (c ? `Поддержка СЛОЯ: напиши @${c} — что случилось, ответим. Если что-то сломалось, приложи скриншот.` : 'Поддержка СЛОЯ: контакт пока не указан.');
 
 const CONNECT_TEXT = '<b>СЛОЙ</b> накидывается поверх Telegram и подчёркивает важное.\n\n<b>Что нужно:</b> Telegram Premium — подключение ботов к чатам (Telegram Business) работает только с ним.\n\n<b>Как подключить:</b>\n1. Настройки → Telegram Business\n2. Чат-боты\n3. Укажи этого бота и выбери чаты\n\nКартинками — по кнопке ниже.';
@@ -149,7 +149,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       return tg.call('sendInvoice', { chat_id: m.chat.id, title: 'Билет «' + plan.title + '»', description: 'Доступ к слоям СЛОЙ на 30 дней',
         payload: 'plan:' + plan.id + ':' + m.from.id, currency: 'XTR', prices: [{ label: plan.title + ' · 30 дней', amount: plan.stars }] });
     }
-    if (/^\/terms/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: TERMS });
+    if (/^\/terms/.test(text) || /^\/privacy/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: termsText(webappUrl) });
     if (/^\/support/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: supportText(supportContact) });
   }
 

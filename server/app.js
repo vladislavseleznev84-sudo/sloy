@@ -12,7 +12,7 @@ function initials(name) {
   return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : '')).toUpperCase();
 }
 
-function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, botUsername = '', supportContact = '', onError = () => {}, now = () => Date.now() }) {
+function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/Moscow', adminIds = new Set(), botId = 0, botUsername = '', supportContact = '', legal = {}, onError = () => {}, now = () => Date.now() }) {
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const fmtDate = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' });
 
@@ -140,7 +140,23 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     return json(res, 404, { error: 'not found' });
   }
 
+  // Юридические страницы: реквизиты оператора берутся из настроек сервера, а не из репозитория.
+  const escHtml = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function serveLegal(res, name) {
+    fs.readFile(path.join(webDir, name + '.html'), 'utf8', (err, html) => {
+      if (err) { res.writeHead(404); return res.end('Not found'); }
+      const vars = {
+        OPERATOR_NAME: legal.OPERATOR_NAME || '[оператор не указан]', OPERATOR_INFO: legal.OPERATOR_INFO || '',
+        KEEP_DAYS: legal.KEEP_DAYS || '30', DATE: legal.DATE || '17 ноября 2026',
+        BOT: botUsername ? '@' + botUsername : 'СЛОЙ', SUPPORT: supportContact ? '@' + supportContact : '[контакт поддержки не указан]',
+      };
+      const out = html.replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in vars ? escHtml(vars[k]) : m));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(out);
+    });
+  }
+
   function serveStatic(req, res, url) {
+    if (/^\/(privacy|terms)(\.html)?$/.test(url.pathname)) return serveLegal(res, url.pathname.replace(/^\//, '').replace(/\.html$/, ''));
     let p = decodeURIComponent(url.pathname); if (p === '/') p = '/index.html';
     const file = path.normalize(path.join(webDir, p));
     if (!file.startsWith(path.resolve(webDir) + path.sep) && file !== path.resolve(webDir)) { res.writeHead(403); return res.end(); }

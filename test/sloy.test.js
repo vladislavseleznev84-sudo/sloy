@@ -501,3 +501,29 @@ test('/start и /connect объясняют, что нужен Telegram Premium,
     assert.match(c.params.reply_markup.inline_keyboard[0][0].web_app.url, /\?r=connect$/);
   }
 });
+
+test('страницы /privacy и /terms: реквизиты из настроек, экранирование, ссылки в /terms бота', async () => {
+  const { db, tg, bot } = setup();
+  const handler = createApp({ botToken: TOKEN, webhookSecret: 's', db, tg, bot, webDir: __dirname + '/../web', botUsername: 'sloy_test_bot', supportContact: 'help_nick',
+    legal: { OPERATOR_NAME: 'ИП <Иванов> & Ко', OPERATOR_INFO: 'ИНН 1234', KEEP_DAYS: '30' }, now: () => T0 });
+  const srv = http.createServer(handler); await new Promise((r) => srv.listen(0, r));
+  const base = 'http://127.0.0.1:' + srv.address().port;
+  try {
+    const priv = await fetch(base + '/privacy'); const html = await priv.text();
+    assert.strictEqual(priv.status, 200); assert.match(priv.headers.get('content-type'), /text\/html/);
+    assert.match(html, /ИП &lt;Иванов&gt; &amp; Ко/);            // реквизиты подставлены и экранированы
+    assert.match(html, /@help_nick/); assert.match(html, /@sloy_test_bot/); assert.match(html, /30 дней/);
+    assert.doesNotMatch(html, /\{\{[A-Z_]+\}\}/);               // не осталось неподставленных меток
+    const terms = await (await fetch(base + '/terms')).text();
+    assert.match(terms, /Telegram Premium/); assert.match(terms, /не продлевается автоматически/);
+    assert.strictEqual((await fetch(base + '/privacy.html')).status, 200);
+  } finally { srv.close(); }
+  // без настроек оператор помечен как не указанный, а не выдуманный
+  const h2 = createApp({ botToken: TOKEN, webhookSecret: 's', db, tg, bot, webDir: __dirname + '/../web', now: () => T0 });
+  const s2 = http.createServer(h2); await new Promise((r) => s2.listen(0, r));
+  try { assert.match(await (await fetch('http://127.0.0.1:' + s2.address().port + '/privacy')).text(), /оператор не указан/); } finally { s2.close(); }
+  const b2 = createBotForTerms();
+  await b2.bot.handle({ message: { chat: { id: 1 }, from: { id: 1 }, text: '/terms' } });
+  assert.match(b2.tg.calls.at(-1).params.text, /https:\/\/sloy\.example\/privacy/);
+  function createBotForTerms() { const tg = fakeTg(); return { tg, bot: createBot({ tg, db: openDb(':memory:'), webappUrl: 'https://sloy.example' }) }; }
+});

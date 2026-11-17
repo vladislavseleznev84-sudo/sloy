@@ -341,6 +341,7 @@
       (state.isAdmin ? '<button class="clear" data-go="#/admin" style="border-color:#C4FF2E;color:#C4FF2E">Админ-панель</button>' : '') +
       '<div class="m" style="margin:22px 0 0">Тема</div><div class="seg">' + [['auto', 'Как в Telegram'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(function (t) { return '<button class="chip' + (state.theme === t[0] ? ' on' : '') + '" data-act="theme" data-id="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
       (state.support ? '<button class="clear" data-act="support">Написать в поддержку</button>' : '') + '<button class="clear" data-go="#/connect">Как подключить слой</button><button class="clear" data-act="onbshow">Показать знакомство снова</button>' +
+      '<div class="legal-links"><button data-act="openlink" data-url="/privacy">Политика конфиденциальности</button><button data-act="openlink" data-url="/terms">Условия использования</button></div>' +
       '<button class="clear" data-go="#/paywall">' + (state.isAdmin ? 'Тариф: админ — всё включено' : 'Мой билет · СЛОЙ') + '</button></main>' + tabs('layers');
   }
 
@@ -509,6 +510,7 @@
     if (act === 'nextreply') { state.replyIdx[el.dataset.id] = (state.replyIdx[el.dataset.id] || 0) + 1; state.editing = false; haptic(); render(); return; }
     if (act === 'onbnext') { haptic(); if ((state.onbStep || 0) >= ONB.length - 1) { var goConnect = !(state.live && state.connected); finishOnb(); if (goConnect) location.hash = '#/connect'; } else { state.onbStep = (state.onbStep || 0) + 1; render(); } return; }
     if (act === 'onbshow') { state.showOnb = true; state.onbStep = 0; haptic(); if (location.hash === '#/' || location.hash === '') render(); else location.hash = '#/'; return; }
+    if (act === 'openlink') { var full = location.origin + el.dataset.url; var tt = tg(); if (tt && tt.openLink) tt.openLink(full); else window.open(full, '_blank'); return; }
     if (act === 'support') { var u = 'https://t.me/' + state.support; var t = tg(); if (t && t.openTelegramLink) t.openTelegramLink(u); else window.open(u, '_blank'); return; }
     if (act === 'connnext') { var cs = connectSteps(); if ((state.connStep || 0) >= cs.length - 1) { state.connStep = 0; haptic('medium'); location.hash = '#/'; } else { state.connStep = (state.connStep || 0) + 1; haptic(); render(); } return; }
     if (act === 'connprev') { state.connStep = Math.max(0, (state.connStep || 0) - 1); haptic(); render(); return; }
