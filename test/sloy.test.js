@@ -577,3 +577,26 @@ test('события пишутся: /start, подключение, подар�
     assert.strictEqual(st('joined'), 1); assert.strictEqual(st('open'), 1); assert.strictEqual(st('paywall'), 1);   // админ в воронку не входит, пользователь 99 — входит
   });
 });
+
+test('/set и /settings: только админ в личном чате; оператор и поддержка из Telegram попадают на страницы и в /support', async () => {
+  const { db, tg, bot } = setup(new Set([1]));
+  const say = (from, chat, text) => bot.handle({ message: { chat: { id: chat }, from: { id: from }, text } });
+  const n0 = tg.calls.length;
+  await say(2, 2, '/set operator Взлом');                                   // не админ — молчим и ничего не меняем
+  await say(1, 555, '/set operator Взлом');                                 // админ, но не в личном чате
+  assert.strictEqual(tg.calls.length, n0); assert.strictEqual(db.getConfig('operator_name'), '');
+  await say(1, 1, '/set operator Иванов Иван Иванович');
+  await say(1, 1, '/set info ИНН 123, почта a@b.ru');
+  await say(1, 1, '/set support @my_nick');
+  assert.strictEqual(db.getConfig('operator_name'), 'Иванов Иван Иванович'); assert.strictEqual(db.getConfig('support'), 'my_nick');
+  await say(1, 1, '/set support плохой ник');                               // кириллица в нике — отказ
+  assert.strictEqual(db.getConfig('support'), 'my_nick'); assert.match(tg.calls.at(-1).params.text, /латинские/);
+  await say(1, 1, '/settings'); assert.match(tg.calls.at(-1).params.text, /Иванов Иван Иванович/);
+  await say(5, 5, '/support'); assert.match(tg.calls.at(-1).params.text, /@my_nick/);
+  const handler = createApp({ botToken: TOKEN, webhookSecret: 's', db, tg, bot, webDir: __dirname + '/../web', botUsername: 'b_bot', now: () => T0 });
+  const srv = http.createServer(handler); await new Promise((r) => srv.listen(0, r));
+  try {
+    const html = await (await fetch('http://127.0.0.1:' + srv.address().port + '/privacy')).text();
+    assert.match(html, /Иванов Иван Иванович/); assert.match(html, /@my_nick/); assert.match(html, /ИНН 123, почта a@b\.ru/);
+  } finally { srv.close(); }
+});

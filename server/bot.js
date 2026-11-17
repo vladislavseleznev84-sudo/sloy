@@ -133,6 +133,19 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
       return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: CONNECT_TEXT, reply_markup: openBtn('Показать, как подключить', 'connect') });
     }
     if (/^\/connect/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML', text: CONNECT_TEXT, reply_markup: openBtn('Показать с картинками', 'connect') });
+    // Настройки оператора прямо из Telegram (только админ, только в личном чате с ботом): /set operator ..., /set info ..., /set support ник
+    if (/^\/(set|settings)(\s|$)/.test(text) && adminIds.has(m.from.id) && m.chat.id === m.from.id) {
+      const mm = /^\/set\s+(operator|info|support)\s+([\s\S]{1,300})$/.exec(text);
+      const keys = { operator: 'operator_name', info: 'operator_info', support: 'support' };
+      if (mm) {
+        let val = mm[2].trim();
+        if (mm[1] === 'support') { val = val.replace(/^@/, ''); if (!/^[A-Za-z0-9_]{4,32}$/.test(val)) return tg.call('sendMessage', { chat_id: m.chat.id, text: 'Ник поддержки: латинские буквы, цифры и _ (4–32 символа), например /set support my_nick' }); }
+        db.setConfig(keys[mm[1]], val);
+        return tg.call('sendMessage', { chat_id: m.chat.id, text: 'Сохранено: ' + mm[1] + ' = ' + val });
+      }
+      const cur = (k) => db.getConfig(k) || '— не указано —';
+      return tg.call('sendMessage', { chat_id: m.chat.id, text: 'Настройки оператора:\noperator: ' + cur('operator_name') + '\ninfo: ' + cur('operator_info') + '\nsupport: ' + (db.getConfig('support') || supportContact || '— не указано —') + '\n\nИзменить:\n/set operator ФИО или ИП\n/set info ИНН и почта\n/set support ник_без_собаки' });
+    }
     if (/^\/backup/.test(text) && adminIds.has(m.from.id) && backup) {
       const file = backup();
       return tg.upload('sendDocument', { chat_id: m.chat.id, caption: 'Резервная копия базы СЛОЙ. Храните в надёжном месте: внутри личные сообщения.' }, 'document', file);
@@ -153,7 +166,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
         payload: 'plan:' + plan.id + ':' + m.from.id, currency: 'XTR', prices: [{ label: plan.title + ' · 30 дней', amount: plan.stars }] });
     }
     if (/^\/terms/.test(text) || /^\/privacy/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: termsText(webappUrl) });
-    if (/^\/support/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: supportText(supportContact) });
+    if (/^\/support/.test(text)) return tg.call('sendMessage', { chat_id: m.chat.id, text: supportText(db.getConfig('support') || supportContact) });
   }
 
   async function onPaid(m) {

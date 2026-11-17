@@ -64,7 +64,7 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
       const u = db.getUser(user.id);
       const plan = activePlan(u, now(), isAdmin);
       const trial = (u.trial_state === 1 || u.trial_state === 2) && u.plan_until > now() ? { daysLeft: Math.max(1, Math.ceil((u.plan_until - now()) / 86400000)) } : null;
-      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin, trial, botUsername, support: supportContact });
+      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin, trial, botUsername, support: db.getConfig('support') || supportContact });
     }
     if (req.method === 'POST' && url.pathname === '/api/invoice') {
       const { plan } = await body(req);
@@ -156,10 +156,11 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
   function serveLegal(res, name) {
     fs.readFile(path.join(webDir, name + '.html'), 'utf8', (err, html) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }
+      const sup = db.getConfig('support') || supportContact;
       const vars = {
-        OPERATOR_NAME: legal.OPERATOR_NAME || '[оператор не указан]', OPERATOR_INFO: legal.OPERATOR_INFO || '',
+        OPERATOR_NAME: db.getConfig('operator_name') || legal.OPERATOR_NAME || '[оператор не указан]', OPERATOR_INFO: db.getConfig('operator_info') || legal.OPERATOR_INFO || '',
         KEEP_DAYS: legal.KEEP_DAYS || '30', DATE: legal.DATE || '17 ноября 2026',
-        BOT: botUsername ? '@' + botUsername : 'СЛОЙ', SUPPORT: supportContact ? '@' + supportContact : '[контакт поддержки не указан]',
+        BOT: botUsername ? '@' + botUsername : 'СЛОЙ', SUPPORT: sup ? '@' + sup : '[контакт поддержки не указан]',
       };
       const out = html.replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in vars ? escHtml(vars[k]) : m));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(out);

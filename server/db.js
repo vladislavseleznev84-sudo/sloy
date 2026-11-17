@@ -37,6 +37,7 @@ function openDb(path = ':memory:') {
     user_id INTEGER NOT NULL, kind TEXT NOT NULL, ts INTEGER NOT NULL, day TEXT NOT NULL DEFAULT '', amount INTEGER NOT NULL DEFAULT 0,
     UNIQUE(user_id, kind, day));
     CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
   const q = (sql) => db.prepare(sql);
   return {
     raw: db,
@@ -101,6 +102,8 @@ function openDb(path = ':memory:') {
     },
     allEvents() { return q('SELECT user_id, kind, ts, day, amount FROM events ORDER BY ts ASC LIMIT 300000').all(); },
     purgeEvents(before) { return q('DELETE FROM events WHERE ts < ?').run(before).changes; },
+    getConfig(key) { const r = q('SELECT value FROM config WHERE key=?').get(key); return r ? r.value : ''; },
+    setConfig(key, value) { q('INSERT INTO config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, String(value)); },
     clearUser(userId) { q('DELETE FROM messages WHERE user_id=?').run(userId); q('DELETE FROM facts WHERE user_id=?').run(userId); },
   };
 }
