@@ -41,7 +41,7 @@
     if (!isLive()) return Promise.resolve();
     state.live = true; state.loaded = false; render();
     return api('GET', '/api/feed').then(function (r) {
-      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; var sl = (r.data.settings || {}).layers; if (sl) { for (var k in sl) if (k in state.layers) state.layers[k] = !!sl[k]; saveLayers(); } }
+      if (r.ok) { D.now = r.data.now; D.messages = r.data.messages; D.quietCount = r.data.quietCount; D.facts = r.data.facts; state.connected = r.data.connected; state.userPlan = r.data.plan; state.isAdmin = !!r.data.isAdmin; state.trial = r.data.trial || null; var sl = (r.data.settings || {}).layers; if (sl) { for (var k in sl) if (k in state.layers) state.layers[k] = !!sl[k]; saveLayers(); } }
       else { toast('Не вышло загрузить ленту'); D.messages = []; D.facts = []; }
     }).catch(function () { toast('Нет связи с сервером'); D.messages = []; D.facts = []; })
       .then(function () { state.loaded = true; render(); });
@@ -267,6 +267,7 @@
     return '<main class="screen">' + topbar('Слушаю ' + D.now.listening + ' чатов') +
       '<div class="big hero"><svg class="ghost" viewBox="0 0 96 96" aria-hidden="true"><path d="M8 20a12 12 0 0 1 12-12H76a12 12 0 0 1 12 12V32H8Z"/><rect x="22" y="36" width="74" height="24"/><path d="M8 64H88V76a12 12 0 0 1-12 12H8Z"/></svg><div class="n" data-count="' + important.length + '">0</div><div style="padding-bottom:4px"><div class="u" style="font-size:16px;font-weight:800">важных</div><div class="m" style="margin-top:5px;line-height:1.5">из ' + D.now.total + ' новых<br>сегодня · ' + D.now.time + '</div></div></div>' +
       '<p class="lead">Я прошёлся по личным чатам. Вот что отметил.</p>' +
+      (state.trial ? '<button class="pp" data-go="#/paywall" style="margin-top:16px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center"><span><span class="src b">Подарок</span><div style="font-size:14px;font-weight:500;margin-top:2px">МАКС бесплатно · осталось ' + state.trial.daysLeft + ' дн.</div></span><span class="btn-d">Тарифы</span></button>' : '') +
       '<div class="stack">' + notes + '</div>' +
       '<button class="ask" data-go="#/ask"><i>&gt;</i>Спроси слой: что я обещал…</button></main>' + tabs('home');
   }

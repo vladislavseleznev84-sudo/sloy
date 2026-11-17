@@ -22,6 +22,7 @@ function openDb(path = ':memory:') {
   // Мягкая миграция: добавляем колонки в уже существующую базу.
   const addColumn = (table, col, def) => { if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); };
   addColumn('users', 'settings', "TEXT NOT NULL DEFAULT '{}'");
+  addColumn('users', 'trial_state', 'INTEGER NOT NULL DEFAULT 0');       // 0 не было, 1 идёт, 2 последний день предупредили, 3 закончился/оплатил
   addColumn('users', 'last_recap', "TEXT NOT NULL DEFAULT ''");
   addColumn('messages', 'snoozed_until', 'INTEGER NOT NULL DEFAULT 0');
   addColumn('messages', 'deleted_at', 'INTEGER NOT NULL DEFAULT 0');
@@ -36,6 +37,8 @@ function openDb(path = ':memory:') {
     raw: db,
     upsertUser(id, now = Date.now()) { q('INSERT OR IGNORE INTO users(id, created) VALUES(?, ?)').run(id, now); return q('SELECT * FROM users WHERE id=?').get(id); },
     getUser(id) { return q('SELECT * FROM users WHERE id=?').get(id); },
+    setTrialState(id, st) { q('UPDATE users SET trial_state=? WHERE id=?').run(st, id); },
+    trialUsers() { return q('SELECT id, plan, plan_until, trial_state FROM users WHERE trial_state IN (1,2)').all(); },
     setPlan(id, plan, until) { q('UPDATE users SET plan=?, plan_until=? WHERE id=?').run(plan, until, id); },
     upsertConnection(c) {
       q(`INSERT INTO connections(id,user_id,user_chat_id,enabled,can_reply) VALUES(?,?,?,?,?)

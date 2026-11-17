@@ -7,7 +7,8 @@ const { analyze } = require('../server/analyze');
 const { openDb } = require('../server/db');
 const { createBot } = require('../server/bot');
 const { createApp } = require('../server/app');
-const { PERIOD_MS } = require('../server/plans');
+const { PERIOD_MS, TRIAL_MS } = require('../server/plans');
+const trialMod = require('../server/trial');
 const recap = require('../server/recap');
 
 const TOKEN = '123:TEST';
@@ -91,7 +92,7 @@ test('/buytest шлёт счёт на 1 ⭐ и возвращает её пос�
   await bot.handle({ message: { chat: { id: 5 }, from: { id: 5 }, successful_payment: { invoice_payload: inv.params.payload, telegram_payment_charge_id: 'ch1' } } });
   assert.deepStrictEqual(tg.calls[1], { method: 'refundStarPayment', params: { user_id: 5, telegram_payment_charge_id: 'ch1' } });
   await bot.handle({ message: { chat: { id: 5 }, from: { id: 5 }, text: '/buy' } });
-  assert.strictEqual(tg.calls.at(-1).params.prices[0].amount, 250);
+  assert.strictEqual(tg.calls.at(-1).params.prices[0].amount, 150);
 });
 
 test('бот отвечает на /terms и /support', async () => {
@@ -130,7 +131,7 @@ test('API: счёт в Stars и ответ от имени пользовате�
     const inv = await fetch(base + '/api/invoice', { method: 'POST', headers: authH(42), body: JSON.stringify({ plan: 'sloy' }) });
     assert.strictEqual((await inv.json()).link, 'https://t.me/$invoice');
     const call = tg.calls.find((c) => c.method === 'createInvoiceLink').params;
-    assert.strictEqual(call.currency, 'XTR'); assert.strictEqual(call.prices[0].amount, 250); assert.strictEqual(call.payload, 'plan:sloy:42');
+    assert.strictEqual(call.currency, 'XTR'); assert.strictEqual(call.prices[0].amount, 150); assert.strictEqual(call.payload, 'plan:sloy:42');
     assert.strictEqual('provider_token' in call, false);
     assert.strictEqual((await fetch(base + '/api/invoice', { method: 'POST', headers: authH(42), body: JSON.stringify({ plan: 'start' }) })).status, 400);
 
@@ -155,11 +156,12 @@ test('вебхук: неверный секрет → 401; статика и з�
   });
 });
 
+const noTrial = (db, id) => { db.setPlan(id, 'start', 0); db.setTrialState(id, 3); };   // в тестах про тарифы подарок уже «использован»
 const bm = (conn, chatId, id, text) => ({ business_message: { business_connection_id: conn, message_id: id, date: T0 / 1000, chat: { id: chatId, first_name: 'Чат' + chatId }, from: { id: chatId }, text } });
 
 test('лимит чатов: на СТАРТЕ 3 чата, четвёртый не обрабатывается; админу лимит не мешает', async () => {
   const { db, bot } = setup(new Set([1]));
-  await bot.handle({ business_connection: { id: 'u2', user: { id: 2 }, user_chat_id: 22, is_enabled: true } });
+  await bot.handle({ business_connection: { id: 'u2', user: { id: 2 }, user_chat_id: 22, is_enabled: true } }); noTrial(db, 2);
   await bot.handle({ business_connection: { id: 'u1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
   for (let c = 100; c < 105; c++) { await bot.handle(bm('u2', c, c, 'Подпиши акт до 18:00')); await bot.handle(bm('u1', c, c + 1000, 'Подпиши акт до 18:00')); }
   assert.strictEqual(db.countChats(2), 3);        // обычный пользователь: ровно лимит тарифа СТАРТ
@@ -176,7 +178,7 @@ test('/id отвечает вашим Telegram ID', async () => {
 
 test('админка: чужим 403; админ видит статистику, выдаёт и снимает тариф; ответы — только на платном', async () => {
   await withServer(async ({ base, bot, db }) => {
-    await bot.handle({ business_connection: { id: 'bc9', user: { id: 99 }, user_chat_id: 9, is_enabled: true } });
+    await bot.handle({ business_connection: { id: 'bc9', user: { id: 99 }, user_chat_id: 9, is_enabled: true } }); noTrial(db, 99);
     await bot.handle(bm('bc9', 7, 1, 'Подпиши акт до 18:00'));
     assert.strictEqual((await fetch(base + '/api/admin/stats', { headers: authH(99) })).status, 403);
     const feedAdmin = await (await fetch(base + '/api/feed', { headers: authH(42) })).json();
@@ -437,7 +439,7 @@ test('резервная копия и оповещения: копия базы
 test('тарифы: СТАРТ без ответов/напоминаний/поиска/«След»; СЛОЙ — без «След»; МАКС и админ — всё', async () => {
   const clock = { t: T0 };
   const { db, tg, bot } = setup(new Set(), 555, clock);
-  await bot.handle({ business_connection: { id: 'c5', user: { id: 5 }, user_chat_id: 55, is_enabled: true } });
+  await bot.handle({ business_connection: { id: 'c5', user: { id: 5 }, user_chat_id: 55, is_enabled: true } }); noTrial(db, 5);
   await bot.handle(bmIn('c5', 7, 1, 'Подпиши акт до 18:00', T0 - 4 * HOUR));
   const base = { db, tg, openBtn: bot.openBtn, tz: 'Europe/Moscow', adminIds: new Set() };
   assert.strictEqual(await reminders.tick({ ...base, now: T0 }), 0);                         // СТАРТ: напоминаний нет
@@ -451,4 +453,38 @@ test('тарифы: СТАРТ без ответов/напоминаний/по
   const n2 = tg.calls.length;
   await bot.handle({ deleted_business_messages: { business_connection_id: 'c5', chat: { id: 7 }, message_ids: [2] } });
   assert.match(tg.calls.at(-1).params.text, /Удалено/); assert.strictEqual(tg.calls.length, n2 + 1);   // МАКС: уведомляет
+});
+
+test('пробная неделя: МАКС новым один раз; предупреждение за сутки и сообщение об окончании; оплата гасит пробный; админам не даётся', async () => {
+  const clock = { t: T0 };
+  const { db, tg, bot } = setup(new Set([1]), 555, clock);
+  await bot.handle({ business_connection: { id: 'n1', user: { id: 7 }, user_chat_id: 77, is_enabled: true } });
+  const u = db.getUser(7);
+  assert.strictEqual(u.plan, 'max'); assert.strictEqual(u.plan_until, T0 + TRIAL_MS); assert.strictEqual(u.trial_state, 1);
+  assert.match(tg.calls.at(-1).params.text, /подарок/i);
+  // переподключение подарок не повторяет
+  await bot.handle({ business_connection: { id: 'n1', user: { id: 7 }, user_chat_id: 77, is_enabled: false } });
+  db.setPlan(7, 'start', 0); db.setTrialState(7, 3);
+  await bot.handle({ business_connection: { id: 'n1', user: { id: 7 }, user_chat_id: 77, is_enabled: true } });
+  assert.strictEqual(db.getUser(7).plan, 'start');
+  // админу подарок не нужен
+  await bot.handle({ business_connection: { id: 'a1', user: { id: 1 }, user_chat_id: 11, is_enabled: true } });
+  assert.strictEqual(db.getUser(1).trial_state, 0);
+  // расписание сообщений
+  await bot.handle({ business_connection: { id: 'n2', user: { id: 8 }, user_chat_id: 88, is_enabled: true } });
+  const base = { db, tg, openBtn: bot.openBtn };
+  const n = tg.calls.length;
+  assert.strictEqual(await trialMod.tick({ ...base, now: T0 + 3 * 86400000 }), 0);                       // середина — тишина
+  assert.strictEqual(await trialMod.tick({ ...base, now: T0 + TRIAL_MS - 3600000 }), 1);                 // за час до конца — предупреждение
+  assert.match(tg.calls.at(-1).params.text, /Завтра закончится/);
+  assert.strictEqual(await trialMod.tick({ ...base, now: T0 + TRIAL_MS - 1800000 }), 0);                 // повторно не предупреждаем
+  assert.strictEqual(await trialMod.tick({ ...base, now: T0 + TRIAL_MS + 1000 }), 1);
+  assert.match(tg.calls.at(-1).params.text, /закончилась/); assert.strictEqual(db.getUser(8).trial_state, 3);
+  assert.strictEqual(await trialMod.tick({ ...base, now: T0 + TRIAL_MS + 2000 }), 0);
+  // после окончания тариф — СТАРТ
+  assert.strictEqual(require('../server/plans').activePlan(db.getUser(8), T0 + TRIAL_MS + 5000).id, 'start');
+  // оплата во время пробного гасит его
+  await bot.handle({ business_connection: { id: 'n3', user: { id: 9 }, user_chat_id: 99, is_enabled: true } });
+  await bot.handle({ message: { chat: { id: 99 }, from: { id: 9 }, successful_payment: { invoice_payload: 'plan:sloy:9', currency: 'XTR', total_amount: 150 } } });
+  assert.strictEqual(db.getUser(9).trial_state, 3); assert.strictEqual(db.getUser(9).plan, 'sloy');
 });

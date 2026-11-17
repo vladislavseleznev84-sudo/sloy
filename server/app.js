@@ -62,7 +62,8 @@ function createApp({ botToken, webhookSecret, db, tg, bot, webDir, tz = 'Europe/
     if (req.method === 'GET' && url.pathname === '/api/feed') {
       const u = db.getUser(user.id);
       const plan = activePlan(u, now(), isAdmin);
-      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin });
+      const trial = (u.trial_state === 1 || u.trial_state === 2) && u.plan_until > now() ? { daysLeft: Math.max(1, Math.ceil((u.plan_until - now()) / 86400000)) } : null;
+      return json(res, 200, { ...buildFeed(user.id, plan), plan: plan.id, features: plan.features, planUntil: u.plan_until, isAdmin, trial });
     }
     if (req.method === 'POST' && url.pathname === '/api/invoice') {
       const { plan } = await body(req);

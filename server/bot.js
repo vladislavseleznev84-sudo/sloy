@@ -1,6 +1,6 @@
 'use strict';
 const { analyze } = require('./analyze');
-const { PLANS, PERIOD_MS, activePlan } = require('./plans');
+const { PLANS, PERIOD_MS, TRIAL_MS, activePlan } = require('./plans');
 const { buildRecap } = require('./recap');
 const { inQuiet } = require('./reminders');
 
@@ -37,8 +37,15 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     db.upsertUser(c.user.id, now());
     db.upsertConnection({ id: c.id, user_id: c.user.id, user_chat_id: c.user_chat_id, enabled: c.is_enabled, can_reply: !!(rights.can_reply || c.can_reply) });
     if (c.is_enabled && !(was && was.enabled)) {   // приветствуем только при первом включении
+      // Подарок: 7 дней МАКС — один раз на человека (не админам и не тем, у кого уже есть тариф).
+      const u = db.getUser(c.user.id);
+      let gift = '';
+      if (u && u.trial_state === 0 && u.plan === 'start' && !adminIds.has(c.user.id)) {
+        db.setPlan(c.user.id, 'max', now() + TRIAL_MS); db.setTrialState(c.user.id, 1);
+        gift = '\n\n<b>Тебе подарок:</b> 7 дней МАКС — ответы, «Ты не ответил», поиск и «След». Попробуй всё.';
+      }
       await tg.call('sendMessage', { chat_id: c.user_chat_id, parse_mode: 'HTML',
-        text: '<b>Слой подключён.</b>\nЯ читаю только новое — прошлую переписку не вижу. Первая пометка появится, как только придёт что-то важное.',
+        text: '<b>Слой подключён.</b>\nЯ читаю только новое — прошлую переписку не вижу. Первая пометка появится, как только придёт что-то важное.' + gift,
         reply_markup: openBtn('Открыть СЛОЙ') });
     }
   }
@@ -160,6 +167,7 @@ function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', adminIds = new Set
     const user = db.upsertUser(m.from.id, now());
     const base = user.plan === planId && user.plan_until > now() ? user.plan_until : now();
     db.setPlan(m.from.id, planId, base + PERIOD_MS);
+    db.setTrialState(m.from.id, 3);                    // оплатил — пробный период больше не нужен
     await tg.call('sendMessage', { chat_id: m.chat.id, text: `Готово. Билет «${plan.title}» активен на 30 дней.` });
   }
 
