@@ -9,7 +9,8 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 const chatName = (c) => c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Чат';
 
 function createBot({ tg, db, webappUrl, tz = 'Europe/Moscow', now = () => Date.now() }) {
-  const openBtn = (text, hash = '') => ({ inline_keyboard: [[{ text, web_app: { url: webappUrl + hash } }]] });
+  // Без публичного адреса (проверка в режиме опроса) кнопку не рисуем — Telegram требует настоящий HTTPS.
+  const openBtn = (text, hash = '') => (webappUrl ? { inline_keyboard: [[{ text, web_app: { url: webappUrl + hash } }]] } : undefined);
 
   async function handle(update) {
     if (update.business_connection) return onConnection(update.business_connection);

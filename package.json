@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server/index.js",
     "webhook": "node scripts/set-webhook.js",
+    "poll": "node server/poll.js",
     "test": "node --test test/*.test.js"
   }
 }
