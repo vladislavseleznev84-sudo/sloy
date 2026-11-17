@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>СЛОЙ — бриф для motion-ролика</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Spectral:ital@1&display=swap">
+<style>
+@page{size:A4;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0A0D18;color:#EDEFE8;font-family:Onest,sans-serif;font-size:10.4pt;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{width:210mm;height:297mm;padding:13mm 14mm 11mm;page-break-after:always;position:relative;overflow:hidden;background:#0A0D18}
+.page:last-child{page-break-after:auto}
+.m{font-family:'JetBrains Mono',monospace;font-size:7.6pt;letter-spacing:.1em;text-transform:uppercase;color:#8B909C}
+h1,h2,h3{font-family:Unbounded,sans-serif;margin:0;letter-spacing:-.02em}
+h1{font-weight:800;font-size:30pt;line-height:1.02}
+h2{font-weight:800;font-size:14pt;margin:0 0 7px}
+h3{font-weight:600;font-size:9.6pt;margin:0 0 3px}
+.sp{font-family:Spectral,serif;font-style:italic;color:#C9CCD3}
+.acid{color:#C4FF2E}.blue{color:#8FA5FF}
+.row{display:flex;gap:14px}.col{flex:1;min-width:0}
+.card{background:#12162A;border:1px solid #2A3250;border-radius:8px;padding:9px 11px}
+.paper{background:#EDEFE8;color:#0B0D14;border-radius:5px;padding:8px 10px}
+.paper .m{color:#4A4F5A}
+p{margin:0 0 6px}
+ul{margin:0;padding-left:15px}li{margin:2px 0}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.sw{height:26px;border-radius:4px;border:1px solid #2A3250}
+.grid{display:grid;gap:8px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.fn{padding:8px 10px;border:1px solid #2A3250;border-radius:7px;background:#0E1224}
+.fn b{font-family:Unbounded,sans-serif;font-size:8.4pt;letter-spacing:-.02em}
+.fn>span{display:block;color:#B6BAC4;font-size:8.8pt;margin-top:2px;line-height:1.35}
+.hl{background:#C4FF2E;color:#07080A;padding:0 3px}
+.sb{display:grid;grid-template-columns:44px 1fr;gap:9px;padding:6px 0;border-top:1px solid #1E2438;align-items:start}
+.sb:first-child{border-top:none}
+.sb .t{font-family:'JetBrains Mono',monospace;font-size:8pt;color:#C4FF2E;padding-top:2px}
+.sb>div>b{font-family:Unbounded,sans-serif;font-size:8.6pt;display:block;letter-spacing:-.02em}
+.sb>div>span{color:#B6BAC4;font-size:9pt;display:block}
+.no{color:#FF6A4D}
+.tag{display:inline-block;border:1px solid #2A3250;border-radius:99px;padding:1px 8px;font-size:8pt;margin:2px 3px 0 0;color:#C9CCD3}
+.num{font-family:Unbounded,sans-serif;font-weight:800;color:#C4FF2E}
+.p3 .sb{padding:3px 0;gap:8px}.p3 .sb>div>span{font-size:8.5pt;line-height:1.3}.p3 .sb>div>b{font-size:8.2pt}
+.p3 li{margin:1px 0}.p3 ul{font-size:8.8pt!important}.p3 .card{padding:6px 10px}.p3 h2{font-size:12.5pt;margin-bottom:4px}.p3 .top{margin-bottom:6px}.p3 .row{gap:10px}
+.p3 p{font-size:8.8pt!important}
+.foot{position:absolute;left:14mm;right:14mm;bottom:7mm;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<!-- ===================== СТРАНИЦА 1 ===================== -->
+<section class="page">
+  <div class="top"><span class="m">СЛОЙ · бриф для motion-ролика · v1</span><span class="m">1 / 3</span></div>
+
+  <div style="display:flex;gap:16px;align-items:center;margin:6px 0 14px">
+    <svg viewBox="0 0 96 96" width="74" height="74"><path d="M8 20a12 12 0 0 1 12-12H76a12 12 0 0 1 12 12V32H8Z" fill="#EDEFE8"/><rect x="22" y="36" width="74" height="24" fill="#C4FF2E"/><path d="M8 64H88V76a12 12 0 0 1-12 12H8Z" fill="#EDEFE8"/></svg>
+    <div><h1>СЛОЙ</h1><div class="sp" style="font-size:15pt;margin-top:4px">Накинь слой.</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;border-left:4px solid #C4FF2E">
+    <b>Что это.</b> Бот и мини-приложение для Telegram, которые накидываются поверх твоих чатов и <span class="hl">подчёркивают важное</span>: сроки, просьбы, личное. Остальное — тишина. Подсказывают ответ по смыслу, напоминают, показывают, что удалили или изменили.
+    <div style="margin-top:6px"><span class="m">Позиционирование</span> &nbsp;«Твой Telegram. На новом уровне.» &nbsp;·&nbsp; <span class="m">Короткие</span> &nbsp;«Тихо. Только важное.»</div>
+  </div>
+
+  <div class="row" style="margin-bottom:10px">
+    <div class="col card"><h3>Для кого</h3><p style="margin:0">Молодые люди 18–25, много общаются в Telegram, тонут в чатах и теряют сроки. <b>Нужен Telegram Premium</b> (подключение через Telegram Business).</p></div>
+    <div class="col card"><h3>Как работает</h3><p style="margin:0">Человек выбирает чаты в Настройках Telegram → Business → Чат-боты. Слой читает <b>только их и только новое</b>, сам ничего не отправляет без тапа.</p></div>
+  </div>
+
+  <h2>Функции</h2>
+  <div class="grid g2">
+    <div class="fn"><b>RADAR</b><span>Находит важное: сроки («до 18:00»), просьбы, личное. Радар сканирует, точки = найденное.</span></div>
+    <div class="fn"><b>Заметки с маркером</b><span><span class="hl">Маркер</span> — нужно действие. <u style="text-decoration-color:#6E8BFF">Подчёркивание</u> — просто знай.</span></div>
+    <div class="fn"><b>Свайпы</b><span>Вправо — ответить, влево — отложить на 3 часа.</span></div>
+    <div class="fn"><b>REPLY</b><span>Ответы по смыслу: «Я тебя люблю» → «Я тебя тоже люблю». Три варианта, уходит <u>только после тапа</u>.</span></div>
+    <div class="fn"><b>Ты не ответил</b><span>Если важное ждёт ответа 3 часа — бот напомнит.</span></div>
+    <div class="fn"><b>★ Важные люди · Тихие часы</b><span>★ — сообщу сразу, даже ночью. С 23:00 до 08:00 остальные молчат.</span></div>
+    <div class="fn"><b>СЛЕД</b><span>Собеседник удалил или поправил сообщение — покажу, что было и во сколько.</span></div>
+    <div class="fn"><b>RECAP · Неделя</b><span>В 21:00 — итоги дня. Неделя в цифрах: сколько шума убрано.</span></div>
+    <div class="fn"><b>Спроси слой</b><span>Поиск: «что я обещал Дане?», «что писала Маша вчера?».</span></div>
+    <div class="fn"><b>Приватность</b><span>Только выбранные чаты, только новое. Память стирается одним тапом.</span></div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div class="col card"><h3>Тарифы (оплата Звёздами Telegram)</h3>
+      <span class="tag">СТАРТ — бесплатно, до 3 чатов</span><span class="tag">СЛОЙ — 150 ⭐ · ответы, напоминания, поиск</span><span class="tag">МАКС — 300 ⭐ · безлимит + «След»</span><span class="tag acid">7 дней МАКС в подарок</span></div>
+  </div>
+  <div class="foot"><span class="m">Бот @sloyofficiall_bot</span><span class="m">Не связан с Telegram</span></div>
+</section>
+
+<!-- ===================== СТРАНИЦА 2 ===================== -->
+<section class="page">
+  <div class="top"><span class="m">Дизайн-система</span><span class="m">2 / 3</span></div>
+
+  <div class="row" style="margin-bottom:10px">
+    <div class="col card"><h2>Логотип</h2>
+      <p style="margin:0 0 6px"><b>Символ «срез»:</b> сообщение, разрезанное на три пласта. Средний пласт сдвинут и горит кислотным — это то, что слой добавляет к переписке. Острый угол внизу слева — как у пузыря сообщения.</p>
+      <p style="margin:0"><b>Вордмарк</b> СЛОЙ — Unbounded 800, трек −4%. Буква <b>«О» разрезана на три пласта</b>, средний сдвигается (в продукте — раз в 7 секунд).</p>
+      <p class="m" style="margin-top:6px">Файлы: assets/symbol.svg · symbol-ink.svg · avatar.png</p></div>
+    <div class="col card"><h2>Цвет</h2>
+      <div class="grid g4" style="margin-bottom:6px">
+        <div><div class="sw" style="background:#0A0D18"></div><span class="m">Бездна<br>#0A0D18</span></div>
+        <div><div class="sw" style="background:#12162A"></div><span class="m">Графит<br>#12162A</span></div>
+        <div><div class="sw" style="background:#EDEFE8"></div><span class="m">Бумага<br>#EDEFE8</span></div>
+        <div><div class="sw" style="background:#C4FF2E"></div><span class="m">Кислота<br>#C4FF2E</span></div>
+        <div><div class="sw" style="background:#2F5BFF"></div><span class="m">Ток<br>#2F5BFF</span></div>
+        <div><div class="sw" style="background:#6E8BFF"></div><span class="m">Ток текст<br>#6E8BFF</span></div>
+        <div><div class="sw" style="background:#FF6A4D"></div><span class="m">Сигнал<br>#FF6A4D</span></div>
+        <div><div class="sw" style="background:#F1EFE7"></div><span class="m">Светлая тема<br>#F1EFE7</span></div>
+      </div>
+      <p style="margin:0;font-size:9pt"><b>Правило одной вспышки:</b> один кислотный элемент на кадр — главное. Ток — информация и память. Сигнал — только удалено/срочное, мельком.</p></div>
+  </div>
+
+  <div class="row" style="margin-bottom:10px">
+    <div class="col card"><h2>Типографика</h2>
+      <div style="font-family:Unbounded;font-weight:800;font-size:17pt;line-height:1.05">3 важных</div><span class="m">Unbounded 700–800 · заголовки, числа</span>
+      <div style="font-size:11pt;margin-top:6px">Подпиши акт до 18:00 — иначе сорвётся оплата.</div><span class="m">Onest 400–600 · текст интерфейса</span>
+      <div style="font-family:'JetBrains Mono';font-size:9.5pt;margin-top:6px;letter-spacing:.06em">RADAR · 14:02 · ЦЕЛЬ 18:00</div><span class="m">JetBrains Mono · метки, время (капсом)</span>
+      <div class="sp" style="font-size:14pt;margin-top:6px">Сегодня тихо. Но эти три не ждут.</div><span class="m">Spectral Italic · живая реплика слоя (одна на кадр)</span></div>
+    <div class="col card"><h2>Графический язык</h2>
+      <ul style="font-size:9.3pt">
+        <li><b>Срез</b> — горизонтальные пласты, один сдвинут (фирменный жест).</li>
+        <li><b>Дуга радара</b> — четверть/полукруг из угла, линия сканирует, точки = найденное.</li>
+        <li><b>Пласты</b> — карточки стопкой, глубина без теней и блюра.</li>
+        <li><b>Подсвет</b> — кислотный маркер поверх живого текста, синее подчёркивание.</li>
+        <li>Бумажные карточки на тёмном, лёгкий наклон ±0.5°. Билеты с перфорацией (тарифы). Огромное число на главной.</li>
+      </ul></div>
+  </div>
+
+  <div class="row" style="margin-bottom:10px">
+    <div class="col card"><h2>Иконки</h2>
+      <p style="font-size:9pt;margin:0 0 6px">Сетка 32, штрих 2, прямые торцы. В каждой <b>один сдвинутый акцентный элемент</b>.</p>
+      <div style="display:flex;gap:14px;align-items:center;color:#EDEFE8">
+        <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16A10 10 0 0 1 16 26"/><path d="M6 6A20 20 0 0 1 26 26"/><circle cx="17" cy="14" r="2.6" fill="#C4FF2E" stroke="none"/></svg>
+        <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5H27V21H12L5 27Z"/><path d="M11 11H21"/><path d="M15 16H21" stroke="#C4FF2E"/></svg>
+        <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 5A11 11 0 1 0 27 16"/><circle cx="16" cy="16" r="3" fill="#C4FF2E" stroke="none"/></svg>
+        <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8H27"/><path d="M5 16H20"/><path d="M5 24H12" stroke="#C4FF2E"/></svg>
+        <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="8" height="8"/><path d="M13 9H21V19"/><circle cx="21" cy="23" r="4" stroke="#C4FF2E"/></svg>
+      </div>
+      <span class="m">RADAR · REPLY · MEMORY · RECAP · AUTOMATION</span></div>
+    <div class="col card"><h2>Голос</h2>
+      <p style="font-size:9.3pt;margin:0 0 5px">Коротко, на «ты», друг в теме. «Слой», а не «бот». Без «ИИ», «нейросеть», «ассистент». Сначала польза, потом шутка.</p>
+      <div style="font-size:9.3pt"><span class="no">✕</span> «Ассистент проанализировал 214 сообщений»<br><span class="acid">✓</span> «Из 214 сообщений важных — три.»</div></div>
+  </div>
+
+  <div class="paper" style="display:flex;gap:12px;align-items:center">
+    <div style="flex:1"><span class="m">Интерфейс: узнаваемые приёмы</span><div style="font-size:9.3pt;margin-top:2px"><b>Плавающая нижняя панель</b> с ползущим кислотным маркером · <b>главный экран</b>: огромное число + заметки-«бумажки» · <b>радар</b> с пульсирующими точками · <b>карточка разбора</b> с заметками на полях · <b>экран оплаты</b> — билеты.</div></div>
+  </div>
+  <div class="foot"><span class="m">Холст с макетами: claude.ai/artifact/FBthAFLREpd4qb6Mt9FDVC (доступ по приглашению)</span></div>
+</section>
+
+<!-- ===================== СТРАНИЦА 3 ===================== -->
+<section class="page p3">
+  <div class="top"><span class="m">Motion · ролик 20 сек · 9:16</span><span class="m">3 / 3</span></div>
+
+  <div class="row" style="margin-bottom:10px">
+    <div class="col card"><h2>Принципы движения</h2>
+      <ul style="font-size:9.3pt">
+        <li><b>Движение несёт смысл:</b> сдвиг среднего пласта = «слой добавил». Не анимируем ради анимации.</li>
+        <li><b>Маркер рисуется</b> слева направо ≈ 1.1 с, потом держится.</li>
+        <li><b>Число набирается</b> от 0 за ≈ 0.8 с (ease-out).</li>
+        <li><b>Заметки въезжают с наклоном</b>, шаг между ними 90 мс.</li>
+        <li><b>Радар:</b> дуги прорисовываются, линия качается ±62°, точки «выпрыгивают» пружиной и пульсируют.</li>
+        <li><b>Победный жест:</b> три пласта (бумага · кислота · бумага) пролетают кадр за ≈ 1.2 с.</li>
+        <li>Кривые: ease-out (0.2, 0.8, 0.2, 1), пружина (0.3, 1.4, 0.4, 1).</li>
+      </ul></div>
+    <div class="col card"><h2>Звук</h2>
+      <p style="font-size:9.3pt;margin:0 0 5px">Сухие щелчки «слайса» на каждом сдвиге пласта, мягкий бас под радаром, тишина перед «Тихо. Только важное.» Без пафосной музыки.</p>
+      <h2 style="margin-top:10px">Чего избегать</h2>
+      <ul style="font-size:9.3pt">
+        <li>Роботов, мозги, нейросетевые «сетки», фиолетовые градиенты.</li>
+        <li>Глитча, глассморфизма ради красоты.</li>
+        <li>Логотипа и бумажного самолёта Telegram.</li>
+        <li>Больше одного кислотного акцента в кадре.</li>
+      </ul></div>
+  </div>
+
+  <h2>Раскадровка (20 сек)</h2>
+  <div class="card" style="padding:4px 12px">
+    <div class="sb"><span class="t">0–2</span><div><b>Шум</b><span>Серые полосы-сообщения сыплются вниз, счётчик «214». Хаос, быстро.</span></div></div>
+    <div class="sb"><span class="t">2–4</span><div><b>Срез</b><span>Полосы схлопываются в три пласта, средний сдвигается кислотным → <b>символ СЛОЙ</b>.</span></div></div>
+    <div class="sb"><span class="t">4–7</span><div><b>Радар</b><span>Дуги, линия сканирует, три точки. Число <span class="num">3</span> набирается: «важных».</span></div></div>
+    <div class="sb"><span class="t">7–10</span><div><b>Заметка и свайп</b><span>«Подпиши акт <span class="hl">до 18:00</span>» — маркер рисуется. Свайп вправо → «Подпишу до 17:00».</span></div></div>
+    <div class="sb"><span class="t">10–12</span><div><b>Тёплый момент</b><span>«Я тебя люблю» → «Я тебя тоже люблю» (Spectral Italic). Три варианта ответа.</span></div></div>
+    <div class="sb"><span class="t">12–14</span><div><b>След</b><span>Сообщение исчезает → карточка «Удалено 15:01 · было: …». <span class="no">Один</span> короткий всполох Сигнала.</span></div></div>
+    <div class="sb"><span class="t">14–16</span><div><b>Тишина</b><span>Ночь, экран гаснет, остаётся одна точка. Текст: «Тихо. Только важное.»</span></div></div>
+    <div class="sb"><span class="t">16–18</span><div><b>Подарок</b><span>«7 дней МАКС бесплатно» — три пласта пролетают кадр.</span></div></div>
+    <div class="sb"><span class="t">18–20</span><div><b>Финал</b><span>Логотип с «О» из трёх пластов. «Твой Telegram. На новом уровне.» → «<b>Накинь слой.</b>» · <span class="m">@sloyofficiall_bot</span></span></div></div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div class="col card" style="border-left:4px solid #FF6A4D"><h3>Что нельзя обещать в рекламе</h3>
+      <ul style="font-size:9pt">
+        <li>«Читает все чаты» — только <b>выбранные</b> и только новое.</li>
+        <li>Работает <b>без Premium</b> — нет, нужен Telegram Premium.</li>
+        <li>«ИИ» и «нейросеть» — сейчас разбор на правилах, не ИИ.</li>
+        <li>Группы и голосовые — не поддерживаются.</li>
+        <li>«След» — только на МАКС. Цены 150/300 ⭐ могут измениться.</li>
+      </ul></div>
+    <div class="col card"><h3>Нужно от заказчика</h3>
+      <ul style="font-size:9pt">
+        <li>Домен и итоговая ссылка в ролик (сейчас временный адрес).</li>
+        <li>Решение по формату: 9:16 (сторис/Reels), 1:1, 16:9.</li>
+        <li>Согласие юриста на формулировки про приватность и «След».</li>
+      </ul></div>
+  </div>
+  <div class="foot"><span class="m">Источник правды: продукт в Telegram и макеты на холсте</span><span class="m">СЛОЙ</span></div>
+</section>
+
+</body>
+</html>
